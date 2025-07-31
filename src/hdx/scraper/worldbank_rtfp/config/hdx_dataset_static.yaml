@@ -1,0 +1,10 @@
+license_id: cc-by
+methodology: Registry
+caveats:
+dataset_source: World Bank
+package_creator: HDX Data Systems Team
+private: False
+maintainer: fdbb8e79-f020-4039-ab3a-9adb482273b8 # erikawei
+owner_org: 905a9a49-5325-4a31-a9d7-147a60a8387c # worldbank
+data_update_frequency: 7
+notes: Real Time Prices (RTP) is a live dataset compiled and updated weekly by the World Bank Development Economics Data Group (DECDG) using a combination of direct price measurement and Machine Learning estimation of missing price data. The historical and current estimates are based on price information gathered from the World Food Program (WFP), UN-Food and Agricultural Organization (FAO), select National Statistical Offices, and are continually updated and revised as more price information becomes available. Real-time exchange rate data used in this process are from official and public sources.

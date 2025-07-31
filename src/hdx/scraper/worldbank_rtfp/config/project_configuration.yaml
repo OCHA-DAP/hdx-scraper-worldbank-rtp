@@ -1,0 +1,14 @@
+# Collector specific configuration
+base_url: "https://microdata.worldbank.org/index.php/api/tables/data/fcv/"
+
+food: "wld_2021_rtfp_v02_m"
+energy: "wld_2023_rtep_v01_m"
+
+title: "Real Time Prices"
+description_food: "Monthly food price estimates by product and market"
+
+description_energy: "Monthly energy price estimates by product and market"
+
+tags:
+  - food security
+  - markets
