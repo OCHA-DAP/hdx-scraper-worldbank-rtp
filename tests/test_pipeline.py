@@ -4,13 +4,13 @@ from hdx.utilities.downloader import Download
 from hdx.utilities.path import temp_dir
 from hdx.utilities.retriever import Retrieve
 
-from hdx.scraper.worldbank_rtfp.pipeline import Pipeline
+from hdx.scraper.worldbank_rtp.pipeline import Pipeline
 
 
 class TestPipeline:
     def test_pipeline(self, configuration, fixtures_dir, input_dir, config_dir):
         with temp_dir(
-            "TestWorldbank_rtfp",
+            "TestWorldbank_rtp",
             delete_on_success=True,
             delete_on_failure=False,
         ) as tempdir:

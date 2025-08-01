@@ -1,6 +1,6 @@
-# Collector for Worldbank_rtfp Datasets
-[![Build Status](https://github.com/OCHA-DAP/hdx-scraper-worldbank_rtfp/actions/workflows/run-python-tests.yaml/badge.svg)](https://github.com/OCHA-DAP/hdx-scraper-worldbank_rtfp/actions/workflows/run-python-tests.yaml)
-[![Coverage Status](https://coveralls.io/repos/github/OCHA-DAP/hdx-scraper-worldbank_rtfp/badge.svg?branch=main&ts=1)](https://coveralls.io/github/OCHA-DAP/hdx-scraper-worldbank_rtfp?branch=main)
+# Collector for Worldbank_rtp Datasets
+[![Build Status](https://github.com/OCHA-DAP/hdx-scraper-worldbank_rtp/actions/workflows/run-python-tests.yaml/badge.svg)](https://github.com/OCHA-DAP/hdx-scraper-worldbank_rtp/actions/workflows/run-python-tests.yaml)
+[![Coverage Status](https://coveralls.io/repos/github/OCHA-DAP/hdx-scraper-worldbank_rtp/badge.svg?branch=main&ts=1)](https://coveralls.io/github/OCHA-DAP/hdx-scraper-worldbank_rtp?branch=main)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 
 This script ...
@@ -35,7 +35,7 @@ For the script to run, you will need to have a file called
  You will also need to supply the universal .useragents.yaml file in your home
  directory as specified in the parameter *user_agent_config_yaml* passed to
  facade in run.py. The collector reads the key
- **hdx-scraper-worldbank_rtfp** as specified in the parameter
+ **hdx-scraper-worldbank_rtp** as specified in the parameter
  *user_agent_lookup*.
 
  Alternatively, you can set up environment variables: `USER_AGENT`, `HDX_KEY`,
@@ -45,7 +45,7 @@ To install and run, execute:
 
 ```shell
     pip install .
-    python -m hdx.scraper.worldbank_rtfp
+    python -m hdx.scraper.worldbank_rtp
 ```
 
 ### Pre-commit

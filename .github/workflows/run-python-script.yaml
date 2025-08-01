@@ -30,7 +30,7 @@ jobs:
         USER_AGENT: ${{ vars.USER_AGENT }}
         EXTRA_PARAMS: ${{ vars.EXTRA_PARAMS }}
       run: |
-        python -m hdx.scraper.worldbank_rtfp
+        python -m hdx.scraper.worldbank_rtp
     - name: Send mail
       if: failure()
       uses: dawidd6/action-send-mail@v3

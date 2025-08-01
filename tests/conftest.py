@@ -20,7 +20,7 @@ def input_dir(fixtures_dir):
 
 @pytest.fixture(scope="session")
 def config_dir(fixtures_dir):
-    return join("src", "hdx", "scraper", "worldbank_rtfp", "config")
+    return join("src", "hdx", "scraper", "worldbank_rtp", "config")
 
 
 @pytest.fixture(scope="session")

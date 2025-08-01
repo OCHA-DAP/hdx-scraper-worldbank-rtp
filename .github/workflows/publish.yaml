@@ -46,4 +46,4 @@ jobs:
         with:
           context: .
           push: true
-          tags: public.ecr.aws/unocha/hdx-scraper-worldbank_rtfp:${{ steps.tag_info.outputs.IMAGE_TAG }}
+          tags: public.ecr.aws/unocha/hdx-scraper-worldbank_rtp:${{ steps.tag_info.outputs.IMAGE_TAG }}

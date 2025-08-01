@@ -1,5 +1,5 @@
 #!/usr/bin/python
-"""Worldbank_rtfp scraper"""
+"""Worldbank_rtp scraper"""
 
 import logging
 from collections import defaultdict
@@ -25,6 +25,7 @@ class Pipeline:
         self._data = None
 
     def generate_dataset(self, country_data) -> Optional[Dataset]:
+        print("am i here")
         country_code = country_data[0].get("ISO3")
         country_name = Country.get_country_name_from_iso3(country_code)
         dataset_title = f"{country_name} - {self._configuration['title']}"
@@ -86,21 +87,22 @@ class Pipeline:
         return country_data
 
     def fetch_data(self) -> List:
+        print("fetch data")
         if self._data is not None:
             return self._data
 
         self._data = []
         limit = 1000
         offset = 0
-        total = None
+        total = 1000  # None
 
         while True:
             data_url = f"{self._configuration['base_url']}{self._configuration['food']}?limit={limit}&offset={offset}"
             response = self._retriever.download_json(data_url)
 
             # comment out for testing and hardcode total above
-            if total is None:
-                total = response.get("total", 0)
+            # if total is None:
+            #     total = response.get("total", 0)
 
             batch = response.get("data", [])
             self._data.extend(batch)

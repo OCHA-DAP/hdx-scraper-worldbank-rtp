@@ -17,19 +17,19 @@ from hdx.utilities.path import (
 )
 from hdx.utilities.retriever import Retrieve
 
-from hdx.scraper.worldbank_rtfp._version import __version__
-from hdx.scraper.worldbank_rtfp.pipeline import Pipeline
+from hdx.scraper.worldbank_rtp._version import __version__
+from hdx.scraper.worldbank_rtp.pipeline import Pipeline
 
 logger = logging.getLogger(__name__)
 
-_LOOKUP = "hdx-scraper-worldbank_rtfp"
+_LOOKUP = "hdx-scraper-worldbank-rtp"
 _SAVED_DATA_DIR = "saved_data"  # Keep in repo to avoid deletion in /tmp
-_UPDATED_BY_SCRIPT = "HDX Scraper: Worldbank_rtfp"
+_UPDATED_BY_SCRIPT = "HDX Scraper: Worldbank_rtp"
 
 
 def main(
-    save: bool = False,
-    use_saved: bool = True,
+    save: bool = True,
+    use_saved: bool = False,
 ) -> None:
     """Generate datasets and create them in HDX
 
@@ -62,9 +62,11 @@ def main(
 
             # data = pipeline.fetch_data()
             countries = pipeline.get_country_list()
+            print(countries)
             country_data = pipeline.aggregate_by_country()
 
             for country in countries:
+                print(country)
                 dataset = pipeline.generate_dataset(country_data.get(country))
                 if dataset:
                     dataset.update_from_yaml(
