@@ -23,16 +23,16 @@ class TestPipeline:
                     save=False,
                     use_saved=True,
                 )
-                pipeline = Pipeline(configuration, retriever, tempdir, "energy")
-                for country_code, records in pipeline.aggregate_by_country(
-                    max_records=5
+                models = ["food", "energy", "currency"]
+                pipeline = Pipeline(configuration, retriever, tempdir)
+                for country_code, model_data in pipeline.aggregate_by_country(
+                    models, max_records=10
                 ):
                     if country_code != "AFG":
                         continue  # Only test Afghanistan
 
-                    records = records[:5]  # Use only the first 5 records
+                    dataset = pipeline.generate_dataset(country_code, model_data)
 
-                    dataset = pipeline.generate_dataset(records)
                     if dataset:
                         dataset.update_from_yaml(
                             path=join(config_dir, "hdx_dataset_static.yaml")
@@ -41,7 +41,7 @@ class TestPipeline:
                         assert dataset == {
                             "name": "afghanistan-real-time-prices",
                             "title": "Afghanistan - Real Time Prices",
-                            "dataset_date": "[2007-01-01T00:00:00 TO 2007-05-01T23:59:59]",
+                            "dataset_date": "[2007-01-01T00:00:00 TO 2025-07-01T23:59:59]",
                             "tags": [
                                 {
                                     "name": "energy",
@@ -78,10 +78,21 @@ class TestPipeline:
                         resources = dataset.get_resources()
                         assert resources == [
                             {
-                                "name": "Real Time Energy Prices for Afghanistan",
-                                "description": "Modeled monthly energy price estimates by product and market",
+                                "description": "Modeled monthly energy price estimates by product and market "
+                                "(RTEP dataset)",
                                 "format": "csv",
+                                "name": "Real Time Energy Prices for Afghanistan",
+                                "resource_type": "file.upload",
+                                "url_type": "upload",
+                            },
+                            {
+                                "description": "Modeled monthly currency exchange rate estimates by market "
+                                "(RTFX dataset)",
+                                "format": "csv",
+                                "name": "Real Time Currency Prices for Afghanistan",
                                 "resource_type": "file.upload",
                                 "url_type": "upload",
                             },
                         ]
+
+                    break

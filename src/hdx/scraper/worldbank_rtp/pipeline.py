@@ -4,7 +4,7 @@
 import logging
 from collections import defaultdict
 from datetime import datetime
-from typing import List, Optional, Tuple
+from typing import Dict, Iterator, List, Optional, Tuple
 
 from hdx.api.configuration import Configuration
 from hdx.data.dataset import Dataset
@@ -27,15 +27,13 @@ class Pipeline:
         self._configuration = configuration
         self._retriever = retriever
         self._tempdir = tempdir
-        self._model = "energy"
 
-    def fetch_data(self, max_records: Optional[int] = None):
+    def fetch_data(self, model: str, max_records: Optional[int] = None):
         limit = 1000
         offset = 0
         total = max_records
 
         while True:
-            model = self._model.lower()
             data_url = f"{self._configuration['base_url']}{self._configuration[model]}?limit={limit}&offset={offset}"
             response = self._retriever.download_json(data_url)
 
@@ -53,30 +51,37 @@ class Pipeline:
             if offset >= total:
                 break
 
-    def aggregate_by_country(self, max_records: Optional[int] = None):
-        country_data = defaultdict(list)
+    def aggregate_by_country(
+        self, models: List, max_records: Optional[int] = None
+    ) -> Iterator[Tuple]:
+        """
+        Aggregate data by country across all models
+        Return a nested dict: {country: {model: [records]}}
+        """
+        country_data = defaultdict(lambda: defaultdict(list))
 
-        for record in self.fetch_data(max_records=max_records):
-            country_code = record.get("ISO3", "Unknown")
+        for model in models:
+            for record in self.fetch_data(model, max_records):
+                country_code = record.get("ISO3", "Unknown")
+                record["DATES"] = parse_date(record.get("DATES"))
+                country_data[country_code][model].append(record)
 
-            # Format date fields
-            record["DATES"] = parse_date(record.get("DATES"))
-            # record["start_dense_data"] = self.format_date(record.get("start_dense_data", ""), "%b %Y")
-            # record["last_survey_point"] = self.format_date(record.get("last_survey_point", ""), "%b %Y")
+                # If one country gets big, yield it and reset
+                total_records = sum(
+                    len(records) for records in country_data[country_code].values()
+                )
+                if total_records >= 10000:
+                    yield country_code, country_data[country_code]
+                    del country_data[country_code]  # Free up memory
 
-            country_data[country_code].append(record)
+        # Yield remaining countries
+        for country_code, model_data in country_data.items():
+            if any(model_data.values()):
+                yield country_code, model_data
 
-            if len(country_data[country_code]) >= 10000:
-                yield country_code, country_data[country_code]
-                country_data[country_code] = []
-
-        # Yield remaining data
-        for country_code, records in country_data.items():
-            if records:
-                yield country_code, records
-
-    def generate_dataset(self, country_data: List[dict]) -> Optional[Dataset]:
-        country_code = country_data[0].get("ISO3", "Unknown")
+    def generate_dataset(
+        self, country_code: str, country_model_data: Dict
+    ) -> Optional[Dataset]:
         country_name = Country.get_country_name_from_iso3(country_code)
         if not country_name:
             logger.warning(f"Unknown ISO3: {country_code}")
@@ -84,11 +89,15 @@ class Pipeline:
 
         dataset_title = f"{country_name} - {self._configuration['title']}"
         dataset_name = slugify(dataset_title)
-        min_date, max_date = self.get_date_range(country_data)
+
+        # Get min/max date across all models
+        all_records = [
+            r for model_records in country_model_data.values() for r in model_records
+        ]
+        min_date, max_date = self.get_date_range(all_records)
 
         dataset_tags = self._configuration["tags"]
 
-        # Dataset info
         dataset = Dataset(
             {
                 "name": dataset_name,
@@ -104,27 +113,26 @@ class Pipeline:
             dataset.add_country_location(country_code)
         except HDXError:
             logger.error(f"Couldn't find country {country_name}, skipping")
-            return
+            return None
 
-        # Add resources here
-        resource_name = (
-            f"Real Time {self._model.capitalize()} Prices for {country_name}"
-        )
-        resource_description = f"description_{self._model}"
-        resource_data = {
-            "name": resource_name,
-            "description": self._configuration[resource_description],
-        }
+        # Add a resource per model
+        for model, records in country_model_data.items():
+            resource_name = f"Real Time {model.capitalize()} Prices for {country_name}"
+            resource_description = f"description_{model}"
+            resource_data = {
+                "name": resource_name,
+                "description": self._configuration.get(resource_description, ""),
+            }
 
-        dataset.generate_resource_from_iterable(
-            headers=list(country_data[0].keys()),
-            iterable=country_data,
-            hxltags={},
-            folder=self._tempdir,
-            filename=f"{slugify(resource_name)}.csv",
-            resourcedata=resource_data,
-            quickcharts=None,
-        )
+            dataset.generate_resource_from_iterable(
+                headers=list(records[0].keys()),
+                iterable=records,
+                hxltags={},
+                folder=self._tempdir,
+                filename=f"{slugify(resource_name)}.csv",
+                resourcedata=resource_data,
+                quickcharts=None,
+            )
 
         return dataset
 
