@@ -55,7 +55,8 @@ def main(
                 save=save,
                 use_saved=use_saved,
             )
-            pipeline = Pipeline(configuration, retriever, tempdir, "energy")
+
+            pipeline = Pipeline(configuration, retriever, tempdir)
             for country_code, records in pipeline.aggregate_by_country():
                 dataset = pipeline.generate_dataset(records)
                 if dataset:

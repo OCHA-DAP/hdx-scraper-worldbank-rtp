@@ -23,12 +23,11 @@ class Pipeline:
         configuration: Configuration,
         retriever: Retrieve,
         tempdir: str,
-        model: str,
     ):
         self._configuration = configuration
         self._retriever = retriever
         self._tempdir = tempdir
-        self._model = model
+        self._model = "energy"
 
     def fetch_data(self, max_records: Optional[int] = None):
         limit = 1000
