@@ -28,7 +28,7 @@ _UPDATED_BY_SCRIPT = "HDX Scraper: Worldbank_rtp"
 
 
 def main(
-    save: bool = True,
+    save: bool = False,
     use_saved: bool = False,
 ) -> None:
     """Generate datasets and create them in HDX
@@ -55,19 +55,9 @@ def main(
                 save=save,
                 use_saved=use_saved,
             )
-            pipeline = Pipeline(configuration, retriever, tempdir)
-            #
-            # Steps to generate dataset
-            #
-
-            # data = pipeline.fetch_data()
-            countries = pipeline.get_country_list()
-            print(countries)
-            country_data = pipeline.aggregate_by_country()
-
-            for country in countries:
-                print(country)
-                dataset = pipeline.generate_dataset(country_data.get(country))
+            pipeline = Pipeline(configuration, retriever, tempdir, "energy")
+            for country_code, records in pipeline.aggregate_by_country():
+                dataset = pipeline.generate_dataset(records)
                 if dataset:
                     dataset.update_from_yaml(
                         script_dir_plus_file(

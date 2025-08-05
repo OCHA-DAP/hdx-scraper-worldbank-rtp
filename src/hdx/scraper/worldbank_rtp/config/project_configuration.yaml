@@ -5,10 +5,9 @@ food: "wld_2021_rtfp_v02_m"
 energy: "wld_2023_rtep_v01_m"
 
 title: "Real Time Prices"
-description_food: "Monthly food price estimates by product and market"
-
-description_energy: "Monthly energy price estimates by product and market"
+description_food: "Modeled monthly food price estimates by product and market"
+description_energy: "Modeled monthly energy price estimates by product and market"
 
 tags:
+  - energy
   - food security
-  - markets

@@ -23,8 +23,65 @@ class TestPipeline:
                     save=False,
                     use_saved=True,
                 )
-                pipeline = Pipeline(configuration, retriever, tempdir)
-                dataset = pipeline.generate_dataset()
-                dataset.update_from_yaml(
-                    path=join(config_dir, "hdx_dataset_static.yaml")
-                )
+                pipeline = Pipeline(configuration, retriever, tempdir, "energy")
+                for country_code, records in pipeline.aggregate_by_country(
+                    max_records=5
+                ):
+                    if country_code != "AFG":
+                        continue  # Only test Afghanistan
+
+                    records = records[:5]  # Use only the first 5 records
+
+                    dataset = pipeline.generate_dataset(records)
+                    if dataset:
+                        dataset.update_from_yaml(
+                            path=join(config_dir, "hdx_dataset_static.yaml")
+                        )
+
+                        assert dataset == {
+                            "name": "afghanistan-real-time-prices",
+                            "title": "Afghanistan - Real Time Prices",
+                            "dataset_date": "[2007-01-01T00:00:00 TO 2007-05-01T23:59:59]",
+                            "tags": [
+                                {
+                                    "name": "energy",
+                                    "vocabulary_id": "b891512e-9516-4bf5-962a-7a289772a2a1",
+                                },
+                                {
+                                    "name": "food security",
+                                    "vocabulary_id": "b891512e-9516-4bf5-962a-7a289772a2a1",
+                                },
+                            ],
+                            "license_id": "cc-by",
+                            "methodology": "Registry",
+                            "dataset_source": "World Bank",
+                            "groups": [{"name": "afg"}],
+                            "package_creator": "HDX Data Systems Team",
+                            "private": False,
+                            "maintainer": "fdbb8e79-f020-4039-ab3a-9adb482273b8",
+                            "owner_org": "905a9a49-5325-4a31-a9d7-147a60a8387c",
+                            "data_update_frequency": 7,
+                            "subnational": "1",
+                            "caveats": None,
+                            "notes": "Real Time Prices (RTP) is a live dataset compiled and updated "
+                            "weekly by the World Bank Development Economics Data Group (DECDG) "
+                            "using a combination of direct price measurement and Machine "
+                            "Learning estimation of missing price data. The historical and "
+                            "current estimates are based on price information gathered from the "
+                            "World Food Program (WFP), UN-Food and Agricultural Organization "
+                            "(FAO), select National Statistical Offices, and are continually "
+                            "updated and revised as more price information becomes available. "
+                            "Real-time exchange rate data used in this process are from official "
+                            "and public sources.",
+                        }
+
+                        resources = dataset.get_resources()
+                        assert resources == [
+                            {
+                                "name": "Real Time Energy Prices for Afghanistan",
+                                "description": "Modeled monthly energy price estimates by product and market",
+                                "format": "csv",
+                                "resource_type": "file.upload",
+                                "url_type": "upload",
+                            },
+                        ]

@@ -4,7 +4,7 @@
 import logging
 from collections import defaultdict
 from datetime import datetime
-from typing import Dict, List, Optional, Tuple
+from typing import List, Optional, Tuple
 
 from hdx.api.configuration import Configuration
 from hdx.data.dataset import Dataset
@@ -18,16 +18,71 @@ logger = logging.getLogger(__name__)
 
 
 class Pipeline:
-    def __init__(self, configuration: Configuration, retriever: Retrieve, tempdir: str):
+    def __init__(
+        self,
+        configuration: Configuration,
+        retriever: Retrieve,
+        tempdir: str,
+        model: str,
+    ):
         self._configuration = configuration
         self._retriever = retriever
         self._tempdir = tempdir
-        self._data = None
+        self._model = model
 
-    def generate_dataset(self, country_data) -> Optional[Dataset]:
-        print("am i here")
-        country_code = country_data[0].get("ISO3")
+    def fetch_data(self, max_records: Optional[int] = None):
+        limit = 1000
+        offset = 0
+        total = max_records
+
+        while True:
+            model = self._model.lower()
+            data_url = f"{self._configuration['base_url']}{self._configuration[model]}?limit={limit}&offset={offset}"
+            response = self._retriever.download_json(data_url)
+
+            if total is None:
+                total = response.get("total", 0)
+
+            batch = response.get("data", [])
+            if not batch:
+                break
+
+            for record in batch:
+                yield record
+
+            offset += limit
+            if offset >= total:
+                break
+
+    def aggregate_by_country(self, max_records: Optional[int] = None):
+        country_data = defaultdict(list)
+
+        for record in self.fetch_data(max_records=max_records):
+            country_code = record.get("ISO3", "Unknown")
+
+            # Format date fields
+            record["DATES"] = parse_date(record.get("DATES"))
+            # record["start_dense_data"] = self.format_date(record.get("start_dense_data", ""), "%b %Y")
+            # record["last_survey_point"] = self.format_date(record.get("last_survey_point", ""), "%b %Y")
+
+            country_data[country_code].append(record)
+
+            if len(country_data[country_code]) >= 10000:
+                yield country_code, country_data[country_code]
+                country_data[country_code] = []
+
+        # Yield remaining data
+        for country_code, records in country_data.items():
+            if records:
+                yield country_code, records
+
+    def generate_dataset(self, country_data: List[dict]) -> Optional[Dataset]:
+        country_code = country_data[0].get("ISO3", "Unknown")
         country_name = Country.get_country_name_from_iso3(country_code)
+        if not country_name:
+            logger.warning(f"Unknown ISO3: {country_code}")
+            return None
+
         dataset_title = f"{country_name} - {self._configuration['title']}"
         dataset_name = slugify(dataset_title)
         min_date, max_date = self.get_date_range(country_data)
@@ -45,6 +100,7 @@ class Pipeline:
         dataset.set_time_period(startdate=min_date, enddate=max_date)
         dataset.add_tags(dataset_tags)
         dataset.set_subnational(True)
+
         try:
             dataset.add_country_location(country_code)
         except HDXError:
@@ -52,10 +108,13 @@ class Pipeline:
             return
 
         # Add resources here
-        resource_name = f"Real Time Food Prices for {country_name}"
+        resource_name = (
+            f"Real Time {self._model.capitalize()} Prices for {country_name}"
+        )
+        resource_description = f"description_{self._model}"
         resource_data = {
             "name": resource_name,
-            "description": self._configuration["description_food"],
+            "description": self._configuration[resource_description],
         }
 
         dataset.generate_resource_from_iterable(
@@ -69,54 +128,6 @@ class Pipeline:
         )
 
         return dataset
-
-    def aggregate_by_country(self) -> Dict[str, List[dict]]:
-        if self._data is None:
-            self.fetch_data()
-
-        country_data = defaultdict(list)
-        for record in self._data:
-            country_code = record.get("ISO3", "Unknown")
-
-            # Format date fields
-            record["DATES"] = parse_date(record.get("DATES"))
-            # record["start_dense_data"] = self.format_date(record.get("start_dense_data", ""),"%b %Y")
-            # record["last_survey_point"] = self.format_date(record.get("last_survey_point", ""),"%b %Y")
-
-            country_data[country_code].append(record)
-        return country_data
-
-    def fetch_data(self) -> List:
-        print("fetch data")
-        if self._data is not None:
-            return self._data
-
-        self._data = []
-        limit = 1000
-        offset = 0
-        total = 1000  # None
-
-        while True:
-            data_url = f"{self._configuration['base_url']}{self._configuration['food']}?limit={limit}&offset={offset}"
-            response = self._retriever.download_json(data_url)
-
-            # comment out for testing and hardcode total above
-            # if total is None:
-            #     total = response.get("total", 0)
-
-            batch = response.get("data", [])
-            self._data.extend(batch)
-
-            offset += limit
-            if offset >= total:
-                break
-
-        return self._data
-
-    def get_country_list(self) -> List[str]:
-        if self._data is None:
-            self.fetch_data()
-        return sorted({record.get("ISO3", "Unknown") for record in self._data})
 
     def format_date(self, date_str: str, date_fmt: str = None) -> str:
         if not date_str:
