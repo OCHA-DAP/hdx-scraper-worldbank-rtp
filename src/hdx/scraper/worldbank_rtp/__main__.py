@@ -6,6 +6,7 @@ script then creates in HDX.
 """
 
 import logging
+from collections import defaultdict
 from os.path import expanduser, join
 
 from hdx.api.configuration import Configuration
@@ -56,9 +57,11 @@ def main(
                 use_saved=use_saved,
             )
 
+            global_model_data = defaultdict(list)
             models = ["food", "energy", "currency"]
             pipeline = Pipeline(configuration, retriever, tempdir)
             for country_code, model_data in pipeline.aggregate_by_country(models):
+                # Create country specific datasets
                 dataset = pipeline.generate_dataset(country_code, model_data)
                 if dataset:
                     dataset.update_from_yaml(
@@ -73,6 +76,26 @@ def main(
                         updated_by_script=_UPDATED_BY_SCRIPT,
                         batch=info["batch"],
                     )
+
+                # Add to global data
+                for model, records in model_data.items():
+                    global_model_data[model].extend(records)
+
+            # Create global dataset
+            global_dataset = pipeline.generate_global_dataset(global_model_data)
+            if global_dataset:
+                global_dataset.update_from_yaml(
+                    script_dir_plus_file(
+                        join("config", "hdx_dataset_static.yaml"), main
+                    )
+                )
+                global_dataset.create_in_hdx(
+                    remove_additional_resources=True,
+                    match_resource_order=False,
+                    hxl_update=False,
+                    updated_by_script=_UPDATED_BY_SCRIPT,
+                    batch=info["batch"],
+                )
 
 
 if __name__ == "__main__":

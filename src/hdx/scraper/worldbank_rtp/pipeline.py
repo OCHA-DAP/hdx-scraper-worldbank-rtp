@@ -136,6 +136,46 @@ class Pipeline:
 
         return dataset
 
+    def generate_global_dataset(self, global_model_data: Dict) -> Optional[Dataset]:
+        dataset_title = f"Global - {self._configuration['title']}"
+        dataset_name = slugify(dataset_title)
+
+        # Get min/max date across all records
+        all_records = [r for records in global_model_data.values() for r in records]
+        min_date, max_date = self.get_date_range(all_records)
+
+        dataset = Dataset(
+            {
+                "name": dataset_name,
+                "title": dataset_title,
+            }
+        )
+        dataset.set_time_period(startdate=min_date, enddate=max_date)
+        dataset.add_tags(self._configuration["tags"])
+        dataset.set_subnational(False)
+        dataset.add_other_location("world")
+
+        for model, records in global_model_data.items():
+            resource_name = f"Global Real Time {model.capitalize()} Prices"
+            resource_description = self._configuration.get(f"description_{model}", "")
+
+            resource_data = {
+                "name": resource_name,
+                "description": resource_description,
+            }
+
+            dataset.generate_resource_from_iterable(
+                headers=list(records[0].keys()),
+                iterable=records,
+                hxltags={},
+                folder=self._tempdir,
+                filename=f"{slugify(resource_name)}.csv",
+                resourcedata=resource_data,
+                quickcharts=None,
+            )
+
+        return dataset
+
     def format_date(self, date_str: str, date_fmt: str = None) -> str:
         if not date_str:
             return ""
