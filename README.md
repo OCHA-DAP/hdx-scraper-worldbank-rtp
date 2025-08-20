@@ -3,7 +3,7 @@
 [![Coverage Status](https://coveralls.io/repos/github/OCHA-DAP/hdx-scraper-worldbank_rtp/badge.svg?branch=main&ts=1)](https://coveralls.io/github/OCHA-DAP/hdx-scraper-worldbank_rtp?branch=main)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 
-This script ...
+This script reads data from the World Bank Real Time Prices API for the food, energy, and currency exchange models. One dataset is created per country with a resource for each model. A global dataset is also created with a resource for each model. The script runs every week.
 
 ## Development
 
