@@ -1,6 +1,6 @@
 license_id: cc-by
 methodology: Other
-methodology-other: |
+methodology_other: |
   [Methodology (RTFP)](https://microdata.worldbank.org/index.php/catalog/4483/pdf-documentation)
 
   [Data Schema (RTFP)](https://microdata.worldbank.org/index.php/catalog/4483/data-dictionary/WLD_2021_RTFP_MKT?file_name=WLD_RTFP_mkt_2025-08-11.csv)
