@@ -55,7 +55,7 @@ class Pipeline:
         self, models: List, max_records: Optional[int] = None
     ) -> Iterator[Tuple]:
         """
-        Aggregate data by country across all models
+        Split data by country across all models
         Return a nested dict: {country: {model: [records]}}
         """
         country_data = defaultdict(lambda: defaultdict(list))
@@ -72,9 +72,9 @@ class Pipeline:
                 )
                 if total_records >= 10000:
                     yield country_code, country_data[country_code]
-                    del country_data[country_code]  # Free up memory
+                    del country_data[country_code]
 
-        # Yield remaining countries
+        # Yield remaining countries if any
         for country_code, model_data in country_data.items():
             if any(model_data.values()):
                 yield country_code, model_data
