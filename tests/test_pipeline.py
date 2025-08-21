@@ -56,7 +56,6 @@ class TestPipeline:
                             "methodology": "Other",
                             "methodology_other": "[Methodology "
                             "(RTFP)](https://microdata.worldbank.org/index.php/catalog/4483/pdf-documentation)\n"
-                            "\n"
                             "[Data Schema "
                             "(RTFP)](https://microdata.worldbank.org/index.php/catalog/4483/data-dictionary/WLD_2021_RTFP_MKT?file_name=WLD_RTFP_mkt_2025-08-11.csv)\n",
                             "dataset_source": "World Bank",
@@ -95,5 +94,3 @@ class TestPipeline:
                                 "url_type": "upload",
                             },
                         ]
-
-                    break
