@@ -83,7 +83,7 @@ class TestPipeline:
                             "country-specific staple foods, Real Time Energy Prices (RTEP) "
                             "includes fuel prices, and Real Time Exchange Rates (RTFX) and "
                             "includes unofficial exchange rate estimates as well as possible "
-                            "other unofficial deflators.",
+                            "other unofficial deflators.\n",
                         }
 
                         resources = dataset.get_resources()
