@@ -56,7 +56,6 @@ class TestPipeline:
                             "methodology": "Other",
                             "methodology_other": "[Methodology "
                             "(RTFP)](https://microdata.worldbank.org/index.php/catalog/4483/pdf-documentation)\n"
-                            "\n"
                             "[Data Schema "
                             "(RTFP)](https://microdata.worldbank.org/index.php/catalog/4483/data-dictionary/WLD_2021_RTFP_MKT?file_name=WLD_RTFP_mkt_2025-08-11.csv)\n",
                             "dataset_source": "World Bank",
@@ -68,12 +67,23 @@ class TestPipeline:
                             "data_update_frequency": 7,
                             "subnational": "1",
                             "caveats": None,
-                            "notes": "RTP includes three sub-series, Real Time Food Prices (RTFP) "
+                            "notes": "Real Time Prices (RTP) is a live dataset compiled and updated "
+                            "weekly by the World Bank Development Economics Data Group (DECDG) "
+                            "using a combination of direct price measurement and Machine "
+                            "Learning estimation of missing price data. The historical and "
+                            "current estimates are based on price information gathered from the "
+                            "World Food Program (WFP), UN-Food and Agricultural Organization "
+                            "(FAO), select National Statistical Offices, and are continually "
+                            "updated and revised as more price information becomes available. "
+                            "Real-time exchange rate data used in this process are from official "
+                            "and public sources.\n"
+                            "\n"
+                            "RTP includes three sub-series, Real Time Food Prices (RTFP) "
                             "includes prices on a variety of food items that primarily include "
                             "country-specific staple foods, Real Time Energy Prices (RTEP) "
                             "includes fuel prices, and Real Time Exchange Rates (RTFX) and "
                             "includes unofficial exchange rate estimates as well as possible "
-                            "other unofficial deflators.",
+                            "other unofficial deflators.\n",
                         }
 
                         resources = dataset.get_resources()
@@ -95,5 +105,3 @@ class TestPipeline:
                                 "url_type": "upload",
                             },
                         ]
-
-                    break
