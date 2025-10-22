@@ -5,7 +5,7 @@ name: Run script
 on:
   workflow_dispatch: # add run button in github
   schedule:
-    - cron: "0 0 * * 0" # every sunday at midnight
+    - cron: "30 9 * * 1"
 
 jobs:
   run:
