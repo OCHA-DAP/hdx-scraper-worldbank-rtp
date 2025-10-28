@@ -55,9 +55,15 @@ def main(
                 save=save,
                 use_saved=use_saved,
             )
-            pipeline = Pipeline(configuration, retriever, tempdir, "energy")
-            for country_code, records in pipeline.aggregate_by_country():
-                dataset = pipeline.generate_dataset(records)
+
+            models = ["food", "energy", "currency"]
+            pipeline = Pipeline(configuration, retriever, tempdir)
+
+            # Aggregate data by country
+            datasets, global_dataset = pipeline.aggregate_and_generate_datasets(models)
+
+            # Create country specific datasets
+            for dataset in datasets:
                 if dataset:
                     dataset.update_from_yaml(
                         script_dir_plus_file(
@@ -65,18 +71,33 @@ def main(
                         )
                     )
                     dataset.create_in_hdx(
-                        remove_additional_resources=True,
+                        remove_additional_resources=False,
                         match_resource_order=False,
                         hxl_update=False,
                         updated_by_script=_UPDATED_BY_SCRIPT,
                         batch=info["batch"],
                     )
 
+            # Create global dataset
+            if global_dataset:
+                global_dataset.update_from_yaml(
+                    script_dir_plus_file(
+                        join("config", "hdx_dataset_static.yaml"), main
+                    )
+                )
+                global_dataset.create_in_hdx(
+                    remove_additional_resources=True,
+                    match_resource_order=False,
+                    hxl_update=False,
+                    updated_by_script=_UPDATED_BY_SCRIPT,
+                    batch=info["batch"],
+                )
+
 
 if __name__ == "__main__":
     facade(
         main,
-        hdx_site="demo",
+        # hdx_site="demo",
         user_agent_config_yaml=join(expanduser("~"), ".useragents.yaml"),
         user_agent_lookup=_LOOKUP,
         project_config_yaml=script_dir_plus_file(

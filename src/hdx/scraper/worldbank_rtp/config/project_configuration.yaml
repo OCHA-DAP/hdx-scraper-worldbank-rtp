@@ -3,10 +3,12 @@ base_url: "https://microdata.worldbank.org/index.php/api/tables/data/fcv/"
 
 food: "wld_2021_rtfp_v02_m"
 energy: "wld_2023_rtep_v01_m"
+currency: "wld_2023_rtfx_v01_m"
 
 title: "Real Time Prices"
-description_food: "Modeled monthly food price estimates by product and market"
-description_energy: "Modeled monthly energy price estimates by product and market"
+description_food: "Modeled monthly food price estimates by product and market (RTFP dataset)"
+description_energy: "Modeled monthly energy price estimates by product and market (RTEP dataset)"
+description_currency: "Modeled monthly currency exchange rate estimates by market (RTFX dataset)"
 
 tags:
   - energy
