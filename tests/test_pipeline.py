@@ -64,7 +64,7 @@ class TestPipeline:
                             "private": False,
                             "maintainer": "fdbb8e79-f020-4039-ab3a-9adb482273b8",
                             "owner_org": "905a9a49-5325-4a31-a9d7-147a60a8387c",
-                            "data_update_frequency": 7,
+                            "data_update_frequency": 14,
                             "subnational": "1",
                             "caveats": None,
                             "notes": "Real Time Prices (RTP) is a live dataset compiled and updated "
@@ -93,15 +93,11 @@ class TestPipeline:
                                 "(RTEP dataset)",
                                 "format": "csv",
                                 "name": "Real Time Energy Prices for Afghanistan",
-                                "resource_type": "file.upload",
-                                "url_type": "upload",
                             },
                             {
                                 "description": "Modeled monthly currency exchange rate estimates by market "
                                 "(RTFX dataset)",
                                 "format": "csv",
                                 "name": "Real Time Currency Prices for Afghanistan",
-                                "resource_type": "file.upload",
-                                "url_type": "upload",
                             },
                         ]
