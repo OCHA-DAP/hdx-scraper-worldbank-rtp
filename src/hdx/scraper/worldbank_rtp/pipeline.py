@@ -51,6 +51,34 @@ class Pipeline:
             if offset >= total:
                 break
 
+    # def aggregate_by_country(
+    #     self, models: List, max_records: Optional[int] = None
+    # ) -> Iterator[Tuple]:
+    #     """
+    #     Split data by country across all models
+    #     Return a nested dict: {country: {model: [records]}}
+    #     """
+    #     country_data = defaultdict(lambda: defaultdict(list))
+    #
+    #     for model in models:
+    #         for record in self.fetch_data(model, max_records):
+    #             country_code = record.get("ISO3", "Unknown")
+    #             record["DATES"] = parse_date(record.get("DATES"))
+    #             country_data[country_code][model].append(record)
+    #
+    #             # If one country gets big, yield it and reset
+    #             total_records = sum(
+    #                 len(records) for records in country_data[country_code].values()
+    #             )
+    #             if total_records >= 10000:
+    #                 yield country_code, country_data[country_code]
+    #                 del country_data[country_code]
+    #
+    #     # Yield remaining countries if any
+    #     for country_code, model_data in country_data.items():
+    #         if any(model_data.values()):
+    #             yield country_code, model_data
+
     def aggregate_by_country(
         self, models: List, max_records: Optional[int] = None
     ) -> Iterator[Tuple]:
@@ -66,15 +94,9 @@ class Pipeline:
                 record["DATES"] = parse_date(record.get("DATES"))
                 country_data[country_code][model].append(record)
 
-                # If one country gets big, yield it and reset
-                total_records = sum(
-                    len(records) for records in country_data[country_code].values()
-                )
-                if total_records >= 10000:
-                    yield country_code, country_data[country_code]
-                    del country_data[country_code]
+        total_countries = len(country_data)
+        logger.info(f"Yielding {total_countries} countries")
 
-        # Yield remaining countries if any
         for country_code, model_data in country_data.items():
             if any(model_data.values()):
                 yield country_code, model_data
@@ -94,6 +116,10 @@ class Pipeline:
         all_records = [
             r for model_records in country_model_data.values() for r in model_records
         ]
+        if not all_records:
+            logger.warning(f"No records for {country_name}, skipping")
+            return None
+
         min_date, max_date = self.get_date_range(all_records)
 
         dataset_tags = self._configuration["tags"]
@@ -117,6 +143,10 @@ class Pipeline:
 
         # Add a resource per model
         for model, records in country_model_data.items():
+            if not records:
+                logger.warning(f"No records for {model} in {country_name}")
+                continue
+
             resource_name = f"Real Time {model.capitalize()} Prices for {country_name}"
             resource_description = f"description_{model}"
             resource_data = {
@@ -133,57 +163,57 @@ class Pipeline:
 
         return dataset
 
-    def generate_global_dataset(self, global_model_data: Dict) -> Optional[Dataset]:
-        dataset_title = f"Global - {self._configuration['title']}"
-        dataset_name = slugify(dataset_title)
+    # def generate_global_dataset(self, global_model_data: Dict) -> Optional[Dataset]:
+    #     dataset_title = f"Global - {self._configuration['title']}"
+    #     dataset_name = slugify(dataset_title)
+    #
+    #     # Get min/max date across all records
+    #     all_records = [r for records in global_model_data.values() for r in records]
+    #     min_date, max_date = self.get_date_range(all_records)
+    #
+    #     dataset = Dataset(
+    #         {
+    #             "name": dataset_name,
+    #             "title": dataset_title,
+    #         }
+    #     )
+    #     dataset.set_time_period(startdate=min_date, enddate=max_date)
+    #     dataset.add_tags(self._configuration["tags"])
+    #     dataset.set_subnational(False)
+    #     dataset.add_other_location("world")
+    #
+    #     for model, records in global_model_data.items():
+    #         resource_name = f"Global Real Time {model.capitalize()} Prices"
+    #         resource_description = self._configuration.get(f"description_{model}", "")
+    #
+    #         resource_data = {
+    #             "name": resource_name,
+    #             "description": resource_description,
+    #         }
+    #
+    #         dataset.generate_resource_from_iterable(
+    #             headers=list(records[0].keys()),
+    #             iterable=records,
+    #             hxltags={},
+    #             folder=self._tempdir,
+    #             filename=f"{slugify(resource_name)}.csv",
+    #             resourcedata=resource_data,
+    #             quickcharts=None,
+    #         )
+    #
+    #     return dataset
 
-        # Get min/max date across all records
-        all_records = [r for records in global_model_data.values() for r in records]
-        min_date, max_date = self.get_date_range(all_records)
-
-        dataset = Dataset(
-            {
-                "name": dataset_name,
-                "title": dataset_title,
-            }
-        )
-        dataset.set_time_period(startdate=min_date, enddate=max_date)
-        dataset.add_tags(self._configuration["tags"])
-        dataset.set_subnational(False)
-        dataset.add_other_location("world")
-
-        for model, records in global_model_data.items():
-            resource_name = f"Global Real Time {model.capitalize()} Prices"
-            resource_description = self._configuration.get(f"description_{model}", "")
-
-            resource_data = {
-                "name": resource_name,
-                "description": resource_description,
-            }
-
-            dataset.generate_resource_from_iterable(
-                headers=list(records[0].keys()),
-                iterable=records,
-                hxltags={},
-                folder=self._tempdir,
-                filename=f"{slugify(resource_name)}.csv",
-                resourcedata=resource_data,
-                quickcharts=None,
-            )
-
-        return dataset
-
-    def format_date(self, date_str: str, date_fmt: str = None) -> str:
-        if not date_str:
-            return ""
-        try:
-            if date_fmt:
-                dt = datetime.strptime(date_str, date_fmt)
-            else:
-                dt = datetime.fromisoformat(date_str.replace("Z", "+00:00"))
-            return dt.date().isoformat()  # Return 'YYYY-MM-DD' format
-        except Exception:
-            return date_str  # Return original value if parsing fails
+    # def format_date(self, date_str: str, date_fmt: str = None) -> str:
+    #     if not date_str:
+    #         return ""
+    #     try:
+    #         if date_fmt:
+    #             dt = datetime.strptime(date_str, date_fmt)
+    #         else:
+    #             dt = datetime.fromisoformat(date_str.replace("Z", "+00:00"))
+    #         return dt.date().isoformat()  # Return 'YYYY-MM-DD' format
+    #     except Exception:
+    #         return date_str  # Return original value if parsing fails
 
     def get_date_range(
         self, records: List
