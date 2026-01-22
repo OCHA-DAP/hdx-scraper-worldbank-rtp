@@ -124,14 +124,11 @@ class Pipeline:
                 "description": self._configuration.get(resource_description, ""),
             }
 
-            dataset.generate_resource_from_iterable(
-                headers=list(records[0].keys()),
-                iterable=records,
-                hxltags={},
+            dataset.generate_resource(
                 folder=self._tempdir,
                 filename=f"{slugify(resource_name)}.csv",
+                rows=records,
                 resourcedata=resource_data,
-                quickcharts=None,
             )
 
         return dataset

@@ -162,8 +162,11 @@ openpyxl==3.1.5
     # via
     #   -c requirements.txt
     #   hdx-python-utilities
-packaging==25.0
-    # via pytest
+packaging==26.0
+    # via
+    #   -c requirements.txt
+    #   pytest
+    #   wheel
 petl==1.7.17
     # via
     #   -c requirements.txt
@@ -266,7 +269,7 @@ ruamel-yaml==0.19.1
     # via
     #   -c requirements.txt
     #   hdx-python-utilities
-setuptools==80.9.0
+setuptools==80.10.1
     # via
     #   -c requirements.txt
     #   ckanapi
@@ -348,7 +351,7 @@ validators==0.35.0
     # via
     #   -c requirements.txt
     #   frictionless
-wheel==0.45.1
+wheel==0.46.3
     # via
     #   -c requirements.txt
     #   libhxl
