@@ -62,7 +62,7 @@ frictionless==5.18.1
     # via
     #   -c requirements.txt
     #   hdx-python-utilities
-hdx-python-api==6.6.1
+hdx-python-api==6.6.3
     # via
     #   -c requirements.txt
     #   hdx-scraper-worldbank-rtp (pyproject.toml)
@@ -71,7 +71,7 @@ hdx-python-country==4.0.1
     #   -c requirements.txt
     #   hdx-scraper-worldbank-rtp (pyproject.toml)
     #   hdx-python-api
-hdx-python-utilities==4.0.2
+hdx-python-utilities==4.0.3
     # via
     #   -c requirements.txt
     #   hdx-scraper-worldbank-rtp (pyproject.toml)
