@@ -3,7 +3,6 @@
 
 import logging
 from collections import defaultdict
-from datetime import datetime, timedelta, timezone
 from typing import Dict, Iterator, List, Optional, Tuple
 
 from hdx.api.configuration import Configuration
@@ -96,18 +95,6 @@ class Pipeline:
         dataset_title = f"{country_name} - {self._configuration['title']}"
         dataset_name = slugify(dataset_title)
 
-        # Get min/max date across all models
-        all_records = [
-            r for model_records in country_model_data.values() for r in model_records
-        ]
-        if not all_records:
-            logger.warning(f"No records for {country_name}, skipping")
-            return None
-
-        min_date, max_date = self.get_date_range(all_records)
-
-        dataset_tags = self._configuration["tags"]
-
         dataset = Dataset(
             {
                 "name": dataset_name,
@@ -115,8 +102,7 @@ class Pipeline:
             }
         )
 
-        dataset.set_time_period(startdate=min_date, enddate=max_date)
-        dataset.add_tags(dataset_tags)
+        dataset.add_tags(self._configuration["tags"])
         dataset.set_subnational(True)
 
         try:
@@ -125,11 +111,23 @@ class Pipeline:
             logger.error(f"Couldn't find country {country_name}, skipping")
             return None
 
+        min_date = None
+        max_date = None
+
         # Add a resource per model
         for model, records in country_model_data.items():
             if not records:
                 logger.warning(f"No records for {model} in {country_name}")
                 continue
+
+            # Update date range for this model's records
+            for record in records:
+                date = record.get("DATES")
+                if date:
+                    if min_date is None or date < min_date:
+                        min_date = date
+                    if max_date is None or date > max_date:
+                        max_date = date
 
             resource_name = f"Real Time {model.capitalize()} Prices for {country_name}"
             resource_description = f"description_{model}"
@@ -145,37 +143,38 @@ class Pipeline:
                 resourcedata=resource_data,
             )
 
+        # Set time period after collecting all dates
+        if min_date is None or max_date is None:
+            logger.warning(f"No valid dates found for {country_name}")
+            return None
+
+        dataset.set_time_period(startdate=min_date, enddate=max_date)
+
         return dataset
 
-    def create_global_datasets_by_year(
-        self,
-        models: List,
-        years: Optional[int] = None,
-        max_records: Optional[int] = None,
+    def create_global_datasets_from_csv_files(
+        self, global_csv_files: Dict
     ) -> List[Dataset]:
         """
-        Create separate global datasets for each model, with one resource per year.
+        Create global datasets from CSV files organized by model and year
 
         Args:
-            models: List of model names to process
-            years: Number of years to include. If None, includes all available years. Defaults to None.
-            max_records: Maximum records to fetch per model (for testing)
+            global_csv_files: Dictionary of {(model, year): {'filepath': path, 'file': obj, 'writer': writer, 'headers': list}}
 
         Returns:
-            List of datasets (one per model), each with yearly resources
+            List of datasets (one per model) with resources by year
         """
-        current_year = datetime.now().year
         datasets = []
 
-        if years:
-            logger.info(f"Creating global datasets with last {years} years of data...")
-        else:
-            logger.info("Creating global datasets with all available years...")
+        # Organize files by model
+        files_by_model = defaultdict(list)
+        for (model, year), file_info in global_csv_files.items():
+            files_by_model[model].append((year, file_info["filepath"]))
 
-        for model in models:
-            logger.info(f"Processing global dataset for {model}...")
+        # Create one dataset per model
+        for model in sorted(files_by_model.keys()):
+            logger.info(f"Creating global dataset for {model}")
 
-            # Create dataset for this model
             dataset_title = f"Global - Real Time {model.capitalize()} Prices"
             dataset_name = slugify(dataset_title)
 
@@ -186,57 +185,48 @@ class Pipeline:
                 }
             )
 
-            model_dates = []
+            # Sort years in reverse order (most recent first)
+            year_files = sorted(files_by_model[model], key=lambda x: x[0], reverse=True)
 
-            # Collect all records for this model, organized by year
-            records_by_year = defaultdict(list)
+            all_dates = []
 
-            for record in self.fetch_data(model, max_records=max_records):
-                record["DATES"] = parse_date(record.get("DATES"))
+            # Add one resource per year
+            for year, filepath in year_files:
+                logger.info(f"Adding global resource for {model} {year}")
 
-                if record.get("DATES"):
-                    year = record["DATES"].year
+                # Count records and collect dates for this year
+                record_count = 0
+                import csv as csv_module
 
-                    if years is None or (current_year - year < years):
-                        records_by_year[year].append(record)
-                        model_dates.append(record["DATES"])
-
-            if not records_by_year:
-                logger.warning(f"No records found for model {model}")
-                continue
-
-            # Create one resource per year for this model
-            for year in sorted(records_by_year.keys(), reverse=True):
-                records = records_by_year[year]
-
-                if not records:
-                    continue
+                with open(filepath, "r", encoding="utf-8") as f:
+                    reader = csv_module.DictReader(f)
+                    for row in reader:
+                        record_count += 1
+                        date_str = row.get("DATES")
+                        if date_str:
+                            date = parse_date(date_str)
+                            if date:
+                                all_dates.append(date)
 
                 logger.info(
-                    f"Creating resource for {model} {year} ({len(records)} records)"
+                    f"Global resource {model} {year} has {record_count} records"
                 )
 
-                resource_name = f"Global Real Time {model.capitalize()} Prices {year}"
+                resource_name = f"Real Time {model.capitalize()} Prices {year}"
                 resource_data = {
                     "name": resource_name,
                     "description": f"{self._configuration.get(f'description_{model}', '')} - data for {year}",
+                    "format": "csv",
                 }
 
-                # Generate resource from the collected records
-                dataset.generate_resource(
-                    folder=self._tempdir,
-                    filename=f"{slugify(resource_name)}.csv",
-                    rows=records,
-                    resourcedata=resource_data,
-                )
-                logger.info(
-                    f"Added resource {model} {year} with {len(records)} records"
-                )
+                # Add the CSV file as a resource
+                resource = dataset.add_update_resource(resource_data)
+                resource.set_file_to_upload(filepath)
 
-            # Set time period for this model's dataset
-            if model_dates:
+                # Set time period for this model's dataset
+            if all_dates:
                 dataset.set_time_period(
-                    startdate=min(model_dates), enddate=max(model_dates)
+                    startdate=min(all_dates), enddate=max(all_dates)
                 )
 
             # Add tags
@@ -245,96 +235,8 @@ class Pipeline:
             dataset.add_other_location("world")
 
             datasets.append(dataset)
-            logger.info(f"Completed global dataset for {model}")
+            logger.info(
+                f"Completed global dataset for {model} with {len(year_files)} yearly resources"
+            )
 
         return datasets
-
-    def generate_global_dataset(
-        self, models: List, max_records: Optional[int] = None
-    ) -> Optional[Dataset]:
-        """
-        Create global datasets for each model containing current data (last 2 years)
-        """
-        cutoff_date = datetime.now(timezone.utc) - timedelta(days=730)  # 2 years ago
-
-        logger.info("Creating global dataset...")
-
-        dataset_title = f"Global - {self._configuration['title']}"
-        dataset_name = slugify(dataset_title)
-
-        dataset = Dataset(
-            {
-                "name": dataset_name,
-                "title": dataset_title,
-            }
-        )
-
-        overall_dates = []
-        for model in models:
-            record_count = 0
-            first_record = None
-
-            # Collect records for this model (last 2 years only)
-            records = []
-            for record in self.fetch_data(model, max_records=max_records):
-                record["DATES"] = parse_date(record.get("DATES"))
-
-                # Only include records from last 2 years
-                if record.get("DATES") and record["DATES"] >= cutoff_date:
-                    if first_record is None:
-                        first_record = record
-
-                    records.append(record)
-                    overall_dates.append(record["DATES"])
-                    record_count += 1
-
-            if not records:
-                logger.warning(f"No current records for model {model}")
-                continue
-
-            logger.info(f"Filtered {record_count} current records for {model}")
-
-            resource_name = f"Global Real Time {model.capitalize()} Prices"
-            resource_data = {
-                "name": resource_name,
-                "description": f"{self._configuration.get(f'description_{model}', '')} - current data from the last 2 years",
-            }
-
-            # Generate resource from the collected records
-            dataset.generate_resource(
-                folder=self._tempdir,
-                filename=f"{slugify(resource_name)}.csv",
-                rows=records,
-                resourcedata=resource_data,
-            )
-
-            logger.info(f"Added {model} resource with {record_count} current records")
-
-        # Set time period from all resources
-        if overall_dates:
-            dataset.set_time_period(
-                startdate=min(overall_dates), enddate=max(overall_dates)
-            )
-
-        # Add tags
-        tags = self._configuration["tags"]
-        dataset.add_tags(tags)
-        dataset.set_subnational(False)
-        dataset.add_other_location("world")
-
-        return dataset
-
-    def get_date_range(
-        self, records: List
-    ) -> Tuple[Optional[datetime], Optional[datetime]]:
-        dates = []
-        for rec in records:
-            date = rec.get("DATES")
-            if not date:
-                continue
-            dates.append(date)
-
-        if not dates:
-            return None, None
-
-        return min(dates), max(dates)

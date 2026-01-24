@@ -256,7 +256,7 @@ rfc3986==2.0.0
     # via
     #   -c requirements.txt
     #   frictionless
-rich==14.2.0
+rich==14.3.0
     # via
     #   -c requirements.txt
     #   typer

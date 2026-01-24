@@ -5,7 +5,10 @@ script then creates in HDX.
 
 """
 
+import csv
 import logging
+import time
+from datetime import datetime
 from os.path import expanduser, join
 
 from hdx.api.configuration import Configuration
@@ -44,6 +47,8 @@ def main(
     Returns:
         None
     """
+    start_time = time.time()
+
     logger.info(f"##### {_LOOKUP} version {__version__} ####")
 
     if max_countries:
@@ -73,56 +78,20 @@ def main(
             models = ["food", "energy", "currency"]
             pipeline = Pipeline(configuration, retriever, tempdir)
 
-            # Create country datasets
-            logger.info("Creating country datasets...")
-            countries_created = 0
-            countries_failed = 0
-
-            for country_code, model_data in pipeline.aggregate_by_country(
-                models, max_records=max_records, max_countries=max_countries
-            ):
-                try:
-                    dataset = pipeline.generate_dataset(country_code, model_data)
-                    if dataset:
-                        dataset.update_from_yaml(
-                            script_dir_plus_file(
-                                join("config", "hdx_dataset_static.yaml"), main
-                            )
-                        )
-                        dataset.create_in_hdx(
-                            remove_additional_resources=False,
-                            match_resource_order=False,
-                            hxl_update=False,
-                            updated_by_script=_UPDATED_BY_SCRIPT,
-                            batch=info["batch"],
-                        )
-                        countries_created += 1
-                    else:
-                        countries_failed += 1
-                except Exception as e:
-                    logger.error(f"Failed to create dataset for {country_code}: {e}")
-                    countries_failed += 1
-
-            logger.info(
-                f"Countries created: {countries_created}, failed: {countries_failed}"
-            )
-
-            # Create global datasets (one per model with yearly resources)
-            years_msg = (
-                f"last {global_years} years" if global_years else "all available years"
-            )
-            logger.info(f"Creating global datasets ({years_msg})...")
-
-            global_created = 0
-            global_failed = 0
+            current_year = datetime.now().year
+            global_csv_files = {}
 
             try:
-                global_datasets = pipeline.create_global_datasets_by_year(
-                    models, years=global_years, max_records=max_records
-                )
+                # Create country datasets, collect global data
+                countries_created = 0
+                countries_failed = 0
 
-                for dataset in global_datasets:
+                for country_code, model_data in pipeline.aggregate_by_country(
+                    models, max_records=max_records, max_countries=max_countries
+                ):
                     try:
+                        # Create country dataset
+                        dataset = pipeline.generate_dataset(country_code, model_data)
                         if dataset:
                             dataset.update_from_yaml(
                                 script_dir_plus_file(
@@ -130,34 +99,126 @@ def main(
                                 )
                             )
                             dataset.create_in_hdx(
-                                remove_additional_resources=True,
+                                remove_additional_resources=False,
                                 match_resource_order=False,
                                 hxl_update=False,
                                 updated_by_script=_UPDATED_BY_SCRIPT,
                                 batch=info["batch"],
                             )
-                            global_created += 1
-                            logger.info(f"Created global dataset: {dataset['title']}")
+                            countries_created += 1
+                        else:
+                            countries_failed += 1
+
+                        # Write current country data to global CSV files by year
+                        for model, records in model_data.items():
+                            for record in records:
+                                if record.get("DATES"):
+                                    year = record["DATES"].year
+
+                                    # For testing, only pull specific number of years
+                                    if global_years and (
+                                        current_year - year >= global_years
+                                    ):
+                                        continue
+
+                                    # Create CSV file for this model-year if it doesn't exist
+                                    key = (model, year)
+                                    if key not in global_csv_files:
+                                        filepath = join(
+                                            tempdir, f"global_{model}_{year}.csv"
+                                        )
+                                        file_obj = open(
+                                            filepath, "w", newline="", encoding="utf-8"
+                                        )
+                                        headers = list(record.keys())
+                                        writer = csv.DictWriter(
+                                            file_obj, fieldnames=headers
+                                        )
+                                        writer.writeheader()
+
+                                        global_csv_files[key] = {
+                                            "filepath": filepath,
+                                            "file": file_obj,
+                                            "writer": writer,
+                                            "headers": headers,
+                                        }
+
+                                    # Write record to CSV
+                                    global_csv_files[key]["writer"].writerow(record)
+
                     except Exception as e:
-                        logger.error(f"Failed to create global dataset: {e}")
-                        global_failed += 1
+                        logger.error(
+                            f"Failed to create dataset for {country_code}: {e}"
+                        )
+                        countries_failed += 1
 
-            except Exception as e:
-                logger.error(f"Failed to create global datasets: {e}")
-                global_failed += 1
+                elapsed = (time.time() - start_time) / 60
+                logger.info(
+                    f"##### Country datasets complete in {elapsed:.1f} minutes #####"
+                )
+                logger.info(
+                    f"Countries created: {countries_created}, failed: {countries_failed}"
+                )
 
-            logger.info(
-                f"Country datasets: {countries_created} created, {countries_failed} failed"
-            )
-            logger.info(
-                f"Global datasets: {global_created} created, {global_failed} failed"
-            )
+                # Close all CSV files
+                for file_info in global_csv_files.values():
+                    file_info["file"].close()
+
+                global_created = 0
+                global_failed = 0
+
+                try:
+                    global_datasets = pipeline.create_global_datasets_from_csv_files(
+                        global_csv_files
+                    )
+
+                    for dataset in global_datasets:
+                        try:
+                            if dataset:
+                                dataset.update_from_yaml(
+                                    script_dir_plus_file(
+                                        join("config", "hdx_dataset_static.yaml"), main
+                                    )
+                                )
+                                dataset.create_in_hdx(
+                                    remove_additional_resources=True,
+                                    match_resource_order=False,
+                                    hxl_update=False,
+                                    updated_by_script=_UPDATED_BY_SCRIPT,
+                                    batch=info["batch"],
+                                )
+                                global_created += 1
+                                logger.info(
+                                    f"Created global dataset: {dataset['title']}"
+                                )
+                        except Exception as e:
+                            logger.error(f"Failed to create global dataset: {e}")
+                            global_failed += 1
+
+                except Exception as e:
+                    logger.error(f"Failed to create global datasets: {e}")
+                    global_failed += 1
+
+                total_elapsed = (time.time() - start_time) / 60
+                logger.info(f"##### COMPLETE in {total_elapsed:.1f} minutes #####")
+                logger.info(
+                    f"Country datasets: {countries_created} created, {countries_failed} failed"
+                )
+                logger.info(
+                    f"Global datasets: {global_created} created, {global_failed} failed"
+                )
+
+            finally:
+                # Make sure all files are closed
+                for file_info in global_csv_files.values():
+                    if file_info["file"] and not file_info["file"].closed:
+                        file_info["file"].close()
 
 
 if __name__ == "__main__":
     facade(
         main,
-        # hdx_site="demo",
+        # hdx_site="stage",
         user_agent_config_yaml=join(expanduser("~"), ".useragents.yaml"),
         user_agent_lookup=_LOOKUP,
         project_config_yaml=script_dir_plus_file(
