@@ -31,7 +31,7 @@ click==8.3.1
     # via
     #   -c requirements.txt
     #   typer
-coverage==7.13.1
+coverage==7.13.2
     # via pytest-cov
 defopt==7.0.0
     # via
@@ -71,7 +71,7 @@ hdx-python-country==4.0.1
     #   -c requirements.txt
     #   hdx-scraper-worldbank-rtp (pyproject.toml)
     #   hdx-python-api
-hdx-python-utilities==4.0.3
+hdx-python-utilities==4.0.4
     # via
     #   -c requirements.txt
     #   hdx-scraper-worldbank-rtp (pyproject.toml)
@@ -256,7 +256,7 @@ rfc3986==2.0.0
     # via
     #   -c requirements.txt
     #   frictionless
-rich==14.3.0
+rich==14.3.1
     # via
     #   -c requirements.txt
     #   typer
@@ -269,7 +269,7 @@ ruamel-yaml==0.19.1
     # via
     #   -c requirements.txt
     #   hdx-python-utilities
-setuptools==80.10.1
+setuptools==80.10.2
     # via
     #   -c requirements.txt
     #   ckanapi
@@ -328,6 +328,7 @@ typing-extensions==4.15.0
     # via
     #   -c requirements.txt
     #   frictionless
+    #   hdx-python-utilities
     #   pydantic
     #   pydantic-core
     #   typeguard

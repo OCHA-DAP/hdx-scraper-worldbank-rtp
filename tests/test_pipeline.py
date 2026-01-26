@@ -25,6 +25,7 @@ class TestPipeline:
                 )
                 models = ["food", "energy", "currency"]
                 pipeline = Pipeline(configuration, retriever, tempdir)
+
                 for country_code, model_data in pipeline.aggregate_by_country(
                     models, max_records=10
                 ):

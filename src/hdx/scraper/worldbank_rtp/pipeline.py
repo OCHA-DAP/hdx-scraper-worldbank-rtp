@@ -1,6 +1,7 @@
 #!/usr/bin/python
 """Worldbank_rtp scraper"""
 
+import csv as csv_module
 import logging
 from collections import defaultdict
 from typing import Dict, Iterator, List, Optional, Tuple
@@ -196,7 +197,6 @@ class Pipeline:
 
                 # Count records and collect dates for this year
                 record_count = 0
-                import csv as csv_module
 
                 with open(filepath, "r", encoding="utf-8") as f:
                     reader = csv_module.DictReader(f)
@@ -223,7 +223,7 @@ class Pipeline:
                 resource = dataset.add_update_resource(resource_data)
                 resource.set_file_to_upload(filepath)
 
-                # Set time period for this model's dataset
+            # Set time period for this model's dataset
             if all_dates:
                 dataset.set_time_period(
                     startdate=min(all_dates), enddate=max(all_dates)
