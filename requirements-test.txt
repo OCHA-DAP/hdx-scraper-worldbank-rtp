@@ -62,7 +62,7 @@ frictionless==5.18.1
     # via
     #   -c requirements.txt
     #   hdx-python-utilities
-hdx-python-api==6.6.3
+hdx-python-api==6.6.4
     # via
     #   -c requirements.txt
     #   hdx-scraper-worldbank-rtp (pyproject.toml)
@@ -124,7 +124,6 @@ jsonschema-specifications==2025.9.1
 libhxl==5.2.2
     # via
     #   -c requirements.txt
-    #   hdx-python-api
     #   hdx-python-country
 loguru==0.7.3
     # via

@@ -65,7 +65,7 @@ def main(
 
     with wheretostart_tempdir_batch(folder=_LOOKUP) as info:
         tempdir = info["folder"]
-        with Download() as downloader:
+        with Download(rate_limit={"calls": 2, "period": 1}) as downloader:
             retriever = Retrieve(
                 downloader=downloader,
                 fallback_dir=tempdir,
