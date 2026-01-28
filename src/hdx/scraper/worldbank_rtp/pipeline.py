@@ -80,13 +80,30 @@ class Pipeline:
         for model in models:
             logger.info(f"Fetching data for model: {model}")
             model_records = 0
-            for record in self.fetch_data(model, max_records):
-                country_code = record.get("ISO3", "Unknown")
-                record["DATES"] = parse_date(record.get("DATES"))
-                country_data[country_code][model].append(record)
-                model_records += 1
-                total_records += 1
-            logger.info(f"Completed model {model}: {model_records} records")
+
+            try:
+                for record in self.fetch_data(model, max_records):
+                    country_code = record.get("ISO3", "Unknown")
+
+                    try:
+                        dates_value = record.get("DATES")
+                        parsed_date = parse_date(dates_value)
+                        record["DATES"] = parsed_date
+                    except Exception as e:
+                        logger.warning(f"Failed to parse date for record: {e}")
+                        record["DATES"] = None
+
+                    country_data[country_code][model].append(record)
+                    model_records += 1
+                    total_records += 1
+
+                logger.info(f"Completed model {model}: {model_records} records")
+
+            except Exception as e:
+                logger.error(
+                    f"Error processing model {model} after {model_records} records: {e}"
+                )
+                raise
 
         total_countries = len(country_data)
         logger.info(
