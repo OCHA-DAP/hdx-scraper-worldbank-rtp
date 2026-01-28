@@ -3,6 +3,7 @@
 
 import csv as csv_module
 import logging
+import time
 from collections import defaultdict
 from typing import Dict, Iterator, List, Optional, Tuple
 
@@ -32,13 +33,25 @@ class Pipeline:
         limit = 1000
         offset = 0
         total = max_records
+        batch_count = 0
 
         while True:
+            batch_count += 1
             data_url = f"{self._configuration['base_url']}{self._configuration[model]}?limit={limit}&offset={offset}"
+
+            start_time = time.time()
             response = self._retriever.download_json(data_url)
+            elapsed = time.time() - start_time
+
+            logger.info(
+                f"Batch {batch_count}: offset={offset}, "
+                f"download_time={elapsed:.2f}s, "
+                f"records_in_batch={len(response.get('data', []))}"
+            )
 
             if total is None:
                 total = response.get("total", 0)
+                logger.info(f"Total records available: {total}")
 
             batch = response.get("data", [])
             if not batch:
@@ -63,18 +76,32 @@ class Pipeline:
         """
         country_data = defaultdict(lambda: defaultdict(list))
 
+        total_records = 0
         for model in models:
+            logger.info(f"Fetching data for model: {model}")
+            model_records = 0
             for record in self.fetch_data(model, max_records):
                 country_code = record.get("ISO3", "Unknown")
                 record["DATES"] = parse_date(record.get("DATES"))
                 country_data[country_code][model].append(record)
+                model_records += 1
+                total_records += 1
+            logger.info(f"Completed model {model}: {model_records} records")
 
         total_countries = len(country_data)
-        logger.info(f"Yielding {total_countries} countries")
+        logger.info(
+            f"Finished fetching all data: {total_records} total records across {total_countries} countries"
+        )
+        logger.info(f"Starting to yield {total_countries} countries")
 
         countries_yielded = 0
         for country_code, model_data in country_data.items():
             if any(model_data.values()):
+                if countries_yielded % 10 == 0:
+                    logger.info(
+                        f"Yielding country {countries_yielded + 1}/{total_countries}: {country_code}"
+                    )
+
                 yield country_code, model_data
                 countries_yielded += 1
 
@@ -84,6 +111,8 @@ class Pipeline:
                         f"Reached max_countries limit ({max_countries}), stopping"
                     )
                     break
+
+        logger.info(f"Completed yielding all {countries_yielded} countries")
 
     def generate_dataset(
         self, country_code: str, country_model_data: Dict
