@@ -34,8 +34,8 @@ _UPDATED_BY_SCRIPT = "HDX Scraper: Worldbank_rtp"
 def main(
     save: bool = False,
     use_saved: bool = False,
-    max_countries: int | None = None,
-    max_records: int | None = 5000,
+    max_countries: int | None = 50000,
+    max_records: int | None = None,
     global_years: int | None = None,
 ) -> None:
     """Generate datasets and create them in HDX
@@ -65,7 +65,7 @@ def main(
 
     with wheretostart_tempdir_batch(folder=_LOOKUP) as info:
         tempdir = info["folder"]
-        with Download(rate_limit={"calls": 2, "period": 1}) as downloader:
+        with Download() as downloader:
             retriever = Retrieve(
                 downloader=downloader,
                 fallback_dir=tempdir,
