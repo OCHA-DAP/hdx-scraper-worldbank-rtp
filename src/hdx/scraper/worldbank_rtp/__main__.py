@@ -35,7 +35,7 @@ def main(
     save: bool = False,
     use_saved: bool = False,
     max_countries: int | None = None,
-    max_records: int | None = None,
+    max_records: int | None = 5000,
     global_years: int | None = None,
 ) -> None:
     """Generate datasets and create them in HDX

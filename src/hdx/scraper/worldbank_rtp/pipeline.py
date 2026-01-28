@@ -77,6 +77,7 @@ class Pipeline:
         country_data = defaultdict(lambda: defaultdict(list))
 
         total_records = 0
+        last_log_time = time.time()
         for model in models:
             logger.info(f"Fetching data for model: {model}")
             model_records = 0
@@ -96,6 +97,14 @@ class Pipeline:
                     country_data[country_code][model].append(record)
                     model_records += 1
                     total_records += 1
+
+                    current_time = time.time()
+                    if current_time - last_log_time > 30:
+                        logger.info(
+                            f"PROGRESS: Processed {total_records} total records "
+                            f"({model_records} for {model}), {len(country_data)} countries so far..."
+                        )
+                        last_log_time = current_time
 
                 logger.info(f"Completed model {model}: {model_records} records")
 
@@ -121,6 +130,11 @@ class Pipeline:
 
                 yield country_code, model_data
                 countries_yielded += 1
+
+                if countries_yielded % 10 == 0:
+                    logger.info(
+                        f"Yielded {countries_yielded}/{len(country_data)} countries"
+                    )
 
                 # Stop after max_countries if specified
                 if max_countries and countries_yielded >= max_countries:
