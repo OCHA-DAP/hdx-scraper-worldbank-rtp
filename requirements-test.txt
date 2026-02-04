@@ -31,7 +31,7 @@ click==8.3.1
     # via
     #   -c requirements.txt
     #   typer
-coverage==7.13.2
+coverage==7.13.3
     # via pytest-cov
 defopt==7.0.0
     # via
@@ -66,7 +66,7 @@ hdx-python-api==6.6.4
     # via
     #   -c requirements.txt
     #   hdx-scraper-worldbank-rtp (pyproject.toml)
-hdx-python-country==4.0.1
+hdx-python-country==4.1.0
     # via
     #   -c requirements.txt
     #   hdx-scraper-worldbank-rtp (pyproject.toml)
@@ -255,7 +255,7 @@ rfc3986==2.0.0
     # via
     #   -c requirements.txt
     #   frictionless
-rich==14.3.1
+rich==14.3.2
     # via
     #   -c requirements.txt
     #   typer
@@ -363,7 +363,7 @@ xlrd3==1.1.0
     # via
     #   -c requirements.txt
     #   libhxl
-xlsx2csv==0.8.4
+xlsx2csv==0.8.6
     # via
     #   -c requirements.txt
     #   hdx-python-utilities
