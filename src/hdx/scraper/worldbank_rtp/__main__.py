@@ -6,7 +6,6 @@ script then creates in HDX.
 """
 
 import logging
-import time
 from datetime import datetime
 from os.path import expanduser, join
 
@@ -46,8 +45,6 @@ def main(
     Returns:
         None
     """
-    start_time = time.time()
-
     logger.info(f"##### {_LOOKUP} version {__version__} ####")
 
     configuration = Configuration.read()
@@ -70,16 +67,19 @@ def main(
 
             current_year = datetime.now().year
 
-            try:
-                # Create country datasets, collect global data
-                countries_created = 0
-                countries_failed = 0
+            # Create global datasets — stream data to csvs by year
+            global_created = 0
+            global_failed = 0
 
-                for country_code, model_data in pipeline.aggregate_by_country(
-                    models, max_records=max_records, max_countries=max_countries
-                ):
+            file_info, country_codes = pipeline.stream_global_data(
+                models, current_year, max_records, global_years
+            )
+
+            try:
+                global_datasets = pipeline.create_global_datasets(file_info)
+
+                for dataset in global_datasets:
                     try:
-                        dataset = pipeline.generate_dataset(country_code, model_data)
                         if dataset:
                             dataset.update_from_yaml(
                                 script_dir_plus_file(
@@ -87,76 +87,58 @@ def main(
                                 )
                             )
                             dataset.create_in_hdx(
-                                remove_additional_resources=False,
+                                remove_additional_resources=True,
                                 match_resource_order=False,
                                 hxl_update=False,
                                 updated_by_script=_UPDATED_BY_SCRIPT,
                                 batch=info["batch"],
                             )
-                            countries_created += 1
-                        else:
-                            countries_failed += 1
-
-                        # Write current country data to global CSV files
-                        for model, records in model_data.items():
-                            for record in records:
-                                pipeline.write_global_record(
-                                    model, record, current_year, global_years
-                                )
-
+                            global_created += 1
                     except Exception as e:
-                        logger.error(
-                            f"Failed to create dataset for {country_code}: {e}"
+                        logger.error(f"Failed to create global dataset: {e}")
+                        global_failed += 1
+
+            except Exception as e:
+                logger.error(f"Failed to create global datasets: {e}")
+                global_failed += 1
+
+            # Create country datasets — fetch by country
+            countries_created = 0
+            countries_failed = 0
+
+            for country_code in sorted(country_codes):
+                try:
+                    model_data = pipeline.fetch_country_data(
+                        country_code, models, max_records
+                    )
+                    dataset = pipeline.generate_dataset(country_code, model_data)
+                    if dataset:
+                        dataset.update_from_yaml(
+                            script_dir_plus_file(
+                                join("config", "hdx_dataset_static.yaml"), main
+                            )
                         )
+                        dataset.create_in_hdx(
+                            remove_additional_resources=False,
+                            match_resource_order=False,
+                            hxl_update=False,
+                            updated_by_script=_UPDATED_BY_SCRIPT,
+                            batch=info["batch"],
+                        )
+                        countries_created += 1
+                    else:
                         countries_failed += 1
 
-                logger.info(
-                    f"Countries: {countries_created} created, {countries_failed} failed"
-                )
-
-                pipeline.close_global_files()
-
-                # Create global datasets
-                global_created = 0
-                global_failed = 0
-
-                try:
-                    global_datasets = pipeline.create_global_datasets_from_csv_files(
-                        pipeline.get_global_file_info()
-                    )
-
-                    for dataset in global_datasets:
-                        try:
-                            if dataset:
-                                dataset.update_from_yaml(
-                                    script_dir_plus_file(
-                                        join("config", "hdx_dataset_static.yaml"), main
-                                    )
-                                )
-                                dataset.create_in_hdx(
-                                    remove_additional_resources=True,
-                                    match_resource_order=False,
-                                    hxl_update=False,
-                                    updated_by_script=_UPDATED_BY_SCRIPT,
-                                    batch=info["batch"],
-                                )
-                                global_created += 1
-                        except Exception as e:
-                            logger.error(f"Failed to create global dataset: {e}")
-                            global_failed += 1
-
                 except Exception as e:
-                    logger.error(f"Failed to create global datasets: {e}")
-                    global_failed += 1
+                    logger.error(f"Failed to create dataset for {country_code}: {e}")
+                    countries_failed += 1
 
-                elapsed = (time.time() - start_time) / 60
-                logger.info(
-                    f"Done in {elapsed:.1f}min: "
-                    f"{countries_created} country, {global_created} global datasets"
-                )
+                if max_countries and countries_created >= max_countries:
+                    break
 
-            finally:
-                pipeline.close_global_files()
+            logger.info(
+                f"{countries_created} country, {global_created} global datasets"
+            )
 
 
 if __name__ == "__main__":
