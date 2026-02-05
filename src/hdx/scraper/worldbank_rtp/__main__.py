@@ -33,9 +33,9 @@ _UPDATED_BY_SCRIPT = "HDX Scraper: Worldbank_rtp"
 def main(
     save: bool = False,
     use_saved: bool = False,
-    max_countries: int | None = 3,
-    max_records: int | None = 1000,
-    global_years: int | None = 3,
+    max_countries: int | None = None,
+    max_records: int | None = None,
+    global_years: int | None = None,
 ) -> None:
     """Generate datasets and create them in HDX
 
