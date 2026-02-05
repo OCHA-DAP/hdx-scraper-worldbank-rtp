@@ -3,8 +3,9 @@
 
 import csv as csv_module
 import logging
-import time
+import os
 from collections import defaultdict
+from datetime import datetime
 from typing import Dict, Iterator, List, Optional, Tuple
 
 from hdx.api.configuration import Configuration
@@ -33,25 +34,14 @@ class Pipeline:
         limit = 1000
         offset = 0
         total = max_records
-        batch_count = 0
 
         while True:
-            batch_count += 1
             data_url = f"{self._configuration['base_url']}{self._configuration[model]}?limit={limit}&offset={offset}"
 
-            start_time = time.time()
             response = self._retriever.download_json(data_url)
-            elapsed = time.time() - start_time
-
-            logger.info(
-                f"Batch {batch_count}: offset={offset}, "
-                f"download_time={elapsed:.2f}s, "
-                f"records_in_batch={len(response.get('data', []))}"
-            )
 
             if total is None:
                 total = response.get("total", 0)
-                logger.info(f"Total records available: {total}")
 
             batch = response.get("data", [])
             if not batch:
@@ -71,79 +61,94 @@ class Pipeline:
         max_countries: Optional[int] = None,
     ) -> Iterator[Tuple]:
         """
-        Split data by country across all models
-        Return a nested dict: {country: {model: [records]}}
-        """
-        country_data = defaultdict(lambda: defaultdict(list))
+        Two-phase disk-based aggregation to avoid holding all records in memory
 
+        Phase 1: Stream records from API and write to per-country CSV files
+        Phase 2: Process one country at a time, parse dates, and yield
+        """
+        # Track which (country, model) combos have data and their headers
+        country_models = defaultdict(dict)  # {country: {model: headers_list}}
         total_records = 0
-        last_log_time = time.time()
+
+        # Phase 1: Fetch & write to temp CSV files
         for model in models:
-            logger.info(f"Fetching data for model: {model}")
-            model_records = 0
+            open_writers = {}  # {country_code: (file_obj, csv_writer)}
 
             try:
                 for record in self.fetch_data(model, max_records):
                     country_code = record.get("ISO3", "Unknown")
 
-                    try:
-                        dates_value = record.get("DATES")
-                        parsed_date = parse_date(dates_value)
-                        record["DATES"] = parsed_date
-                    except Exception as e:
-                        logger.warning(f"Failed to parse date for record: {e}")
-                        record["DATES"] = None
+                    if country_code not in open_writers:
+                        headers = list(record.keys())
+                        country_models[country_code][model] = headers
+                        filepath = os.path.join(
+                            self._tempdir,
+                            f"temp_{country_code}_{model}.csv",
+                        )
+                        f = open(filepath, "w", newline="", encoding="utf-8")
+                        writer = csv_module.DictWriter(f, fieldnames=headers)
+                        writer.writeheader()
+                        open_writers[country_code] = (f, writer)
 
-                    country_data[country_code][model].append(record)
-                    model_records += 1
+                    open_writers[country_code][1].writerow(record)
                     total_records += 1
 
-                    current_time = time.time()
-                    if current_time - last_log_time > 30:
-                        logger.info(
-                            f"PROGRESS: Processed {total_records} total records "
-                            f"({model_records} for {model}), {len(country_data)} countries so far..."
-                        )
-                        last_log_time = current_time
-
-                logger.info(f"Completed model {model}: {model_records} records")
-
             except Exception as e:
-                logger.error(
-                    f"Error processing model {model} after {model_records} records: {e}"
-                )
+                logger.error(f"Error fetching {model}: {e}")
+                for f, _ in open_writers.values():
+                    f.close()
                 raise
+            finally:
+                for f, _ in open_writers.values():
+                    f.close()
 
-        total_countries = len(country_data)
+        all_countries = list(country_models.keys())
         logger.info(
-            f"Finished fetching all data: {total_records} total records across {total_countries} countries"
+            f"Fetched {total_records} records across {len(all_countries)} countries"
         )
-        logger.info(f"Starting to yield {total_countries} countries")
 
+        # Phase 2: Process one country at a time and yield
         countries_yielded = 0
-        for country_code, model_data in country_data.items():
-            if any(model_data.values()):
-                if countries_yielded % 10 == 0:
-                    logger.info(
-                        f"Yielding country {countries_yielded + 1}/{total_countries}: {country_code}"
+        try:
+            for country_code in all_countries:
+                model_data = {}
+                for model, headers in country_models[country_code].items():
+                    filepath = os.path.join(
+                        self._tempdir,
+                        f"temp_{country_code}_{model}.csv",
                     )
+                    records = []
+                    with open(filepath, "r", encoding="utf-8") as f:
+                        reader = csv_module.DictReader(f)
+                        for row in reader:
+                            # Parse DATES string to datetime
+                            try:
+                                row["DATES"] = parse_date(row.get("DATES"))
+                            except Exception as e:
+                                logger.warning(f"Failed to parse date for record: {e}")
+                                row["DATES"] = None
+                            records.append(row)
+                    model_data[model] = records
 
-                yield country_code, model_data
-                countries_yielded += 1
+                    # Remove temp file
+                    os.remove(filepath)
 
-                if countries_yielded % 10 == 0:
-                    logger.info(
-                        f"Yielded {countries_yielded}/{len(country_data)} countries"
-                    )
+                if any(model_data.values()):
+                    yield country_code, model_data
+                    countries_yielded += 1
 
-                # Stop after max_countries if specified
                 if max_countries and countries_yielded >= max_countries:
-                    logger.info(
-                        f"Reached max_countries limit ({max_countries}), stopping"
-                    )
                     break
-
-        logger.info(f"Completed yielding all {countries_yielded} countries")
+        finally:
+            # Clean up any remaining temp files
+            for cc, models_dict in country_models.items():
+                for mdl in models_dict:
+                    fp = os.path.join(
+                        self._tempdir,
+                        f"temp_{cc}_{mdl}.csv",
+                    )
+                    if os.path.exists(fp):
+                        os.remove(fp)
 
     def generate_dataset(
         self, country_code: str, country_model_data: Dict
@@ -213,14 +218,94 @@ class Pipeline:
 
         return dataset
 
+    def write_global_record(
+        self,
+        model: str,
+        record: Dict,
+        current_year: int,
+        global_years: Optional[int] = None,
+    ) -> None:
+        """Write record to the appropriate global CSV file
+
+        Opens per-(model, year) CSV writers and tracks min/max dates
+        incrementally.
+        """
+        date = record.get("DATES")
+        if not date:
+            return
+
+        if isinstance(date, datetime):
+            year = date.year
+        else:
+            return
+
+        if global_years and (current_year - year >= global_years):
+            return
+
+        key = (model, year)
+
+        if not hasattr(self, "_global_writers"):
+            self._global_writers = {}
+            self._global_date_ranges = {}
+
+        if key not in self._global_writers:
+            filepath = os.path.join(self._tempdir, f"global_{model}_{year}.csv")
+            headers = list(record.keys())
+            f = open(filepath, "w", newline="", encoding="utf-8")
+            writer = csv_module.DictWriter(f, fieldnames=headers)
+            writer.writeheader()
+            self._global_writers[key] = {
+                "file": f,
+                "writer": writer,
+                "filepath": filepath,
+            }
+            self._global_date_ranges[key] = {
+                "min_date": date,
+                "max_date": date,
+            }
+
+        self._global_writers[key]["writer"].writerow(record)
+
+        dr = self._global_date_ranges[key]
+        if date < dr["min_date"]:
+            dr["min_date"] = date
+        if date > dr["max_date"]:
+            dr["max_date"] = date
+
+    def close_global_files(self) -> None:
+        """Close all open global CSV file handles"""
+        if not hasattr(self, "_global_writers"):
+            return
+        for info in self._global_writers.values():
+            f = info["file"]
+            if f and not f.closed:
+                f.close()
+
+    def get_global_file_info(self) -> Dict:
+        """Return pre-computed file info for global datasets
+
+        Returns:
+            Dict of {(model, year): {"filepath": ..., "min_date": ..., "max_date": ...}}
+        """
+        if not hasattr(self, "_global_writers"):
+            return {}
+        result = {}
+        for key, writer_info in self._global_writers.items():
+            result[key] = {
+                "filepath": writer_info["filepath"],
+                "min_date": self._global_date_ranges[key]["min_date"],
+                "max_date": self._global_date_ranges[key]["max_date"],
+            }
+        return result
+
     def create_global_datasets_from_csv_files(
-        self, global_csv_files: Dict
+        self, global_file_info: Dict
     ) -> List[Dataset]:
         """
         Create global datasets from CSV files organized by model and year
 
         Args:
-            global_csv_files: Dictionary of {(model, year): {'filepath': path, 'file': obj, 'writer': writer, 'headers': list}}
+            global_file_info: Dictionary of {(model, year): {"filepath": path, "min_date": datetime, "max_date": datetime}}
 
         Returns:
             List of datasets (one per model) with resources by year
@@ -229,13 +314,11 @@ class Pipeline:
 
         # Organize files by model
         files_by_model = defaultdict(list)
-        for (model, year), file_info in global_csv_files.items():
-            files_by_model[model].append((year, file_info["filepath"]))
+        for (model, year), file_info in global_file_info.items():
+            files_by_model[model].append((year, file_info))
 
         # Create one dataset per model
         for model in sorted(files_by_model.keys()):
-            logger.info(f"Creating global dataset for {model}")
-
             dataset_title = f"Global - Real Time {model.capitalize()} Prices"
             dataset_name = slugify(dataset_title)
 
@@ -249,28 +332,22 @@ class Pipeline:
             # Sort years in reverse order (most recent first)
             year_files = sorted(files_by_model[model], key=lambda x: x[0], reverse=True)
 
-            all_dates = []
+            model_min_date = None
+            model_max_date = None
 
             # Add one resource per year
-            for year, filepath in year_files:
-                logger.info(f"Adding global resource for {model} {year}")
+            for year, file_info in year_files:
+                filepath = file_info["filepath"]
 
-                # Count records and collect dates for this year
-                record_count = 0
-
-                with open(filepath, "r", encoding="utf-8") as f:
-                    reader = csv_module.DictReader(f)
-                    for row in reader:
-                        record_count += 1
-                        date_str = row.get("DATES")
-                        if date_str:
-                            date = parse_date(date_str)
-                            if date:
-                                all_dates.append(date)
-
-                logger.info(
-                    f"Global resource {model} {year} has {record_count} records"
-                )
+                # Update overall date range from pre-computed values
+                yr_min = file_info["min_date"]
+                yr_max = file_info["max_date"]
+                if yr_min:
+                    if model_min_date is None or yr_min < model_min_date:
+                        model_min_date = yr_min
+                if yr_max:
+                    if model_max_date is None or yr_max > model_max_date:
+                        model_max_date = yr_max
 
                 resource_name = f"Real Time {model.capitalize()} Prices {year}"
                 resource_data = {
@@ -284,9 +361,9 @@ class Pipeline:
                 resource.set_file_to_upload(filepath)
 
             # Set time period for this model's dataset
-            if all_dates:
+            if model_min_date and model_max_date:
                 dataset.set_time_period(
-                    startdate=min(all_dates), enddate=max(all_dates)
+                    startdate=model_min_date, enddate=model_max_date
                 )
 
             # Add tags
@@ -295,8 +372,5 @@ class Pipeline:
             dataset.add_other_location("world")
 
             datasets.append(dataset)
-            logger.info(
-                f"Completed global dataset for {model} with {len(year_files)} yearly resources"
-            )
 
         return datasets

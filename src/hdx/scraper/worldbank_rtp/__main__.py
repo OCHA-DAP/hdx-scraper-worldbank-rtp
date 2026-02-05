@@ -5,7 +5,6 @@ script then creates in HDX.
 
 """
 
-import csv
 import logging
 import time
 from datetime import datetime
@@ -35,7 +34,7 @@ def main(
     save: bool = False,
     use_saved: bool = False,
     max_countries: int | None = None,
-    max_records: int | None = 141000,
+    max_records: int | None = None,
     global_years: int | None = None,
 ) -> None:
     """Generate datasets and create them in HDX
@@ -50,15 +49,6 @@ def main(
     start_time = time.time()
 
     logger.info(f"##### {_LOOKUP} version {__version__} ####")
-
-    if max_countries:
-        logger.info(f"TEST MODE: Processing only {max_countries} countries")
-    if max_records:
-        logger.info(f"TEST MODE: Processing only {max_records} records per model")
-    if global_years:
-        logger.info(f"Global datasets: Including last {global_years} years")
-    else:
-        logger.info("Global datasets: Including all available years")
 
     configuration = Configuration.read()
     User.check_current_user_write_access("hdx")
@@ -79,7 +69,6 @@ def main(
             pipeline = Pipeline(configuration, retriever, tempdir)
 
             current_year = datetime.now().year
-            global_csv_files = {}
 
             try:
                 # Create country datasets, collect global data
@@ -90,7 +79,6 @@ def main(
                     models, max_records=max_records, max_countries=max_countries
                 ):
                     try:
-                        # Create country dataset
                         dataset = pipeline.generate_dataset(country_code, model_data)
                         if dataset:
                             dataset.update_from_yaml(
@@ -109,42 +97,12 @@ def main(
                         else:
                             countries_failed += 1
 
-                        # Write current country data to global CSV files by year
+                        # Write current country data to global CSV files
                         for model, records in model_data.items():
                             for record in records:
-                                if record.get("DATES"):
-                                    year = record["DATES"].year
-
-                                    # For testing, only pull specific number of years
-                                    if global_years and (
-                                        current_year - year >= global_years
-                                    ):
-                                        continue
-
-                                    # Create CSV file for this model-year if it doesn't exist
-                                    key = (model, year)
-                                    if key not in global_csv_files:
-                                        filepath = join(
-                                            tempdir, f"global_{model}_{year}.csv"
-                                        )
-                                        file_obj = open(
-                                            filepath, "w", newline="", encoding="utf-8"
-                                        )
-                                        headers = list(record.keys())
-                                        writer = csv.DictWriter(
-                                            file_obj, fieldnames=headers
-                                        )
-                                        writer.writeheader()
-
-                                        global_csv_files[key] = {
-                                            "filepath": filepath,
-                                            "file": file_obj,
-                                            "writer": writer,
-                                            "headers": headers,
-                                        }
-
-                                    # Write record to CSV
-                                    global_csv_files[key]["writer"].writerow(record)
+                                pipeline.write_global_record(
+                                    model, record, current_year, global_years
+                                )
 
                     except Exception as e:
                         logger.error(
@@ -152,24 +110,19 @@ def main(
                         )
                         countries_failed += 1
 
-                elapsed = (time.time() - start_time) / 60
                 logger.info(
-                    f"##### Country datasets complete in {elapsed:.1f} minutes #####"
-                )
-                logger.info(
-                    f"Countries created: {countries_created}, failed: {countries_failed}"
+                    f"Countries: {countries_created} created, {countries_failed} failed"
                 )
 
-                # Close all CSV files
-                for file_info in global_csv_files.values():
-                    file_info["file"].close()
+                pipeline.close_global_files()
 
+                # Create global datasets
                 global_created = 0
                 global_failed = 0
 
                 try:
                     global_datasets = pipeline.create_global_datasets_from_csv_files(
-                        global_csv_files
+                        pipeline.get_global_file_info()
                     )
 
                     for dataset in global_datasets:
@@ -188,9 +141,6 @@ def main(
                                     batch=info["batch"],
                                 )
                                 global_created += 1
-                                logger.info(
-                                    f"Created global dataset: {dataset['title']}"
-                                )
                         except Exception as e:
                             logger.error(f"Failed to create global dataset: {e}")
                             global_failed += 1
@@ -199,20 +149,14 @@ def main(
                     logger.error(f"Failed to create global datasets: {e}")
                     global_failed += 1
 
-                total_elapsed = (time.time() - start_time) / 60
-                logger.info(f"##### COMPLETE in {total_elapsed:.1f} minutes #####")
+                elapsed = (time.time() - start_time) / 60
                 logger.info(
-                    f"Country datasets: {countries_created} created, {countries_failed} failed"
-                )
-                logger.info(
-                    f"Global datasets: {global_created} created, {global_failed} failed"
+                    f"Done in {elapsed:.1f}min: "
+                    f"{countries_created} country, {global_created} global datasets"
                 )
 
             finally:
-                # Make sure all files are closed
-                for file_info in global_csv_files.values():
-                    if file_info["file"] and not file_info["file"].closed:
-                        file_info["file"].close()
+                pipeline.close_global_files()
 
 
 if __name__ == "__main__":
