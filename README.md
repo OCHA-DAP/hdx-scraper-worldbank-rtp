@@ -3,7 +3,7 @@
 [![Coverage Status](https://coveralls.io/repos/github/OCHA-DAP/hdx-scraper-worldbank-rtp/badge.svg?branch=main&ts=1)](https://coveralls.io/github/OCHA-DAP/hdx-scraper-worldbank-rtp?branch=main)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 
-This script connects to the World Bank [API](https://microdata.worldbank.org/catalog/6134) and extracts real-time prices data (food, energy, and currency). To create the global datasets, a bulk fetch streams all records to CSV files by model and year and creates 3 global datasets (one per model) with a resource for each year. To create the country datasets, API calls are made per country and one dataset is created for each country with resources for each model. The script runs every two weeks.
+This script connects to the World Bank [API](https://microdata.worldbank.org/catalog/6134) and extracts real-time prices data (food, energy, and currency). For each country, the script fetches data per model using `ISO3` filtered API calls and creates a country dataset with one resource per model. The records are also written to global CSV files organized by model and year. After all countries are processed, 3 global datasets (one per model) are created with a resource for each year. The script runs every two weeks.
 
 ## Development
 

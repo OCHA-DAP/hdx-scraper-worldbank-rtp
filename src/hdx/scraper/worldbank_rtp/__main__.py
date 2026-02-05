@@ -12,6 +12,7 @@ from os.path import expanduser, join
 from hdx.api.configuration import Configuration
 from hdx.data.user import User
 from hdx.facades.infer_arguments import facade
+from hdx.location.country import Country
 from hdx.utilities.downloader import Download
 from hdx.utilities.path import (
     script_dir_plus_file,
@@ -32,9 +33,9 @@ _UPDATED_BY_SCRIPT = "HDX Scraper: Worldbank_rtp"
 def main(
     save: bool = False,
     use_saved: bool = False,
-    max_countries: int | None = None,
-    max_records: int | None = None,
-    global_years: int | None = None,
+    max_countries: int | None = 3,
+    max_records: int | None = 1000,
+    global_years: int | None = 3,
 ) -> None:
     """Generate datasets and create them in HDX
 
@@ -67,23 +68,74 @@ def main(
 
             current_year = datetime.now().year
 
-            # Create global datasets — stream data to csvs by year
+            country_codes = sorted(Country.countriesdata()["countries"].keys())
+
+            countries_created = 0
+            countries_failed = 0
+
+            try:
+                for country_code in country_codes:
+                    try:
+                        model_data = pipeline.fetch_country_data(
+                            country_code, models, max_records
+                        )
+
+                        if not any(model_data.values()):
+                            continue
+
+                        # Write to global CSVs
+                        for model, records in model_data.items():
+                            for record in records:
+                                pipeline.write_global_record(
+                                    model, record, current_year, global_years
+                                )
+
+                        # Create country dataset
+                        dataset = pipeline.generate_dataset(country_code, model_data)
+                        if dataset:
+                            dataset.update_from_yaml(
+                                script_dir_plus_file(
+                                    join("config", "hdx_dataset_static.yaml"),
+                                    main,
+                                )
+                            )
+                            dataset.create_in_hdx(
+                                remove_additional_resources=False,
+                                match_resource_order=False,
+                                hxl_update=False,
+                                updated_by_script=_UPDATED_BY_SCRIPT,
+                                batch=info["batch"],
+                            )
+                            countries_created += 1
+                        else:
+                            countries_failed += 1
+
+                    except Exception as e:
+                        logger.error(
+                            f"Failed to create dataset for {country_code}: {e}"
+                        )
+                        countries_failed += 1
+
+                    if max_countries and countries_created >= max_countries:
+                        break
+            finally:
+                pipeline.close_global_files()
+
+            # Create global datasets from accumulated CSVs
             global_created = 0
             global_failed = 0
 
-            file_info, country_codes = pipeline.stream_global_data(
-                models, current_year, max_records, global_years
-            )
-
             try:
-                global_datasets = pipeline.create_global_datasets(file_info)
+                global_file_info = pipeline.get_global_file_info()
+                global_datasets = pipeline.create_global_datasets(global_file_info)
 
                 for dataset in global_datasets:
                     try:
                         if dataset:
                             dataset.update_from_yaml(
                                 script_dir_plus_file(
-                                    join("config", "hdx_dataset_static.yaml"), main
+                                    join("config", "hdx_dataset_static.yaml"),
+                                    main,
                                 )
                             )
                             dataset.create_in_hdx(
@@ -102,40 +154,6 @@ def main(
                 logger.error(f"Failed to create global datasets: {e}")
                 global_failed += 1
 
-            # Create country datasets — fetch by country
-            countries_created = 0
-            countries_failed = 0
-
-            for country_code in sorted(country_codes):
-                try:
-                    model_data = pipeline.fetch_country_data(
-                        country_code, models, max_records
-                    )
-                    dataset = pipeline.generate_dataset(country_code, model_data)
-                    if dataset:
-                        dataset.update_from_yaml(
-                            script_dir_plus_file(
-                                join("config", "hdx_dataset_static.yaml"), main
-                            )
-                        )
-                        dataset.create_in_hdx(
-                            remove_additional_resources=False,
-                            match_resource_order=False,
-                            hxl_update=False,
-                            updated_by_script=_UPDATED_BY_SCRIPT,
-                            batch=info["batch"],
-                        )
-                        countries_created += 1
-                    else:
-                        countries_failed += 1
-
-                except Exception as e:
-                    logger.error(f"Failed to create dataset for {country_code}: {e}")
-                    countries_failed += 1
-
-                if max_countries and countries_created >= max_countries:
-                    break
-
             logger.info(
                 f"{countries_created} country, {global_created} global datasets"
             )
@@ -144,7 +162,7 @@ def main(
 if __name__ == "__main__":
     facade(
         main,
-        # hdx_site="stage",
+        hdx_site="stage",
         user_agent_config_yaml=join(expanduser("~"), ".useragents.yaml"),
         user_agent_lookup=_LOOKUP,
         project_config_yaml=script_dir_plus_file(

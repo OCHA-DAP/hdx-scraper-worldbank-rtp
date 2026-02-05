@@ -28,6 +28,8 @@ class Pipeline:
         self._configuration = configuration
         self._retriever = retriever
         self._tempdir = tempdir
+        self._global_writers: Dict[Tuple, dict] = {}
+        self._global_date_ranges: Dict[Tuple, dict] = {}
 
     def fetch_data(
         self,
@@ -60,85 +62,6 @@ class Pipeline:
             if offset >= total:
                 break
 
-    def stream_global_data(
-        self,
-        models: List,
-        current_year: int,
-        max_records: Optional[int] = None,
-        global_years: Optional[int] = None,
-    ) -> Tuple:
-        """Fetch all records and stream to csv files by (model, year)
-
-        Returns:
-            (file_info, country_codes)
-            - file_info = {(model, year): {"filepath": str, "min_date": datetime, "max_date": datetime}}
-            - country_codes = set of ISO3 codes
-        """
-        country_codes = set()
-        writers: Dict[Tuple, dict] = {}  # (model, year) -> {file, writer, filepath}
-        date_ranges: Dict[Tuple, dict] = {}  # (model, year) -> {min_date, max_date}
-
-        try:
-            for model in models:
-                for record in self.fetch_data(model, max_records):
-                    iso3 = record.get("ISO3")
-                    if iso3:
-                        country_codes.add(iso3)
-
-                    date_str = record.get("DATES")
-                    if not date_str:
-                        continue
-
-                    year = date_str[:4]
-
-                    if global_years and (current_year - int(year) >= global_years):
-                        continue
-
-                    key = (model, year)
-
-                    if key not in writers:
-                        filepath = os.path.join(
-                            self._tempdir, f"global_{model}_{year}.csv"
-                        )
-                        headers = list(record.keys())
-                        f = open(filepath, "w", newline="", encoding="utf-8")
-                        writer = csv_module.DictWriter(f, fieldnames=headers)
-                        writer.writeheader()
-                        writers[key] = {
-                            "file": f,
-                            "writer": writer,
-                            "filepath": filepath,
-                        }
-                        date_ranges[key] = {
-                            "min_date": date_str,
-                            "max_date": date_str,
-                        }
-
-                    writers[key]["writer"].writerow(record)
-
-                    dr = date_ranges[key]
-                    if date_str < dr["min_date"]:
-                        dr["min_date"] = date_str
-                    if date_str > dr["max_date"]:
-                        dr["max_date"] = date_str
-        finally:
-            for info in writers.values():
-                f = info["file"]
-                if f and not f.closed:
-                    f.close()
-
-        # Build file_info with parsed dates
-        file_info = {}
-        for key, writer_info in writers.items():
-            dr = date_ranges[key]
-            file_info[key] = {
-                "filepath": writer_info["filepath"],
-                "min_date": parse_date(dr["min_date"]),
-                "max_date": parse_date(dr["max_date"]),
-            }
-
-        return file_info, country_codes
-
     def fetch_country_data(
         self,
         country_code: str,
@@ -152,16 +75,75 @@ class Pipeline:
         """
         model_data = {}
         for model in models:
-            records = []
-            for record in self.fetch_data(model, max_records, iso3=country_code):
-                try:
-                    record["DATES"] = parse_date(record.get("DATES"))
-                except Exception as e:
-                    logger.warning(f"Failed to parse date for record: {e}")
-                    record["DATES"] = None
-                records.append(record)
+            records = list(self.fetch_data(model, max_records, iso3=country_code))
             model_data[model] = records
         return model_data
+
+    def write_global_record(
+        self,
+        model: str,
+        record: dict,
+        current_year: int,
+        global_years: Optional[int] = None,
+    ) -> None:
+        """Write record to appropriate global CSV file"""
+        date_str = record.get("DATES")
+        if not date_str:
+            return
+
+        year = date_str[:4]
+
+        if global_years and (current_year - int(year) >= global_years):
+            return
+
+        key = (model, year)
+
+        if key not in self._global_writers:
+            filepath = os.path.join(self._tempdir, f"global_{model}_{year}.csv")
+            headers = list(record.keys())
+            f = open(filepath, "w", newline="", encoding="utf-8")
+            writer = csv_module.DictWriter(f, fieldnames=headers)
+            writer.writeheader()
+            self._global_writers[key] = {
+                "file": f,
+                "writer": writer,
+                "filepath": filepath,
+            }
+            self._global_date_ranges[key] = {
+                "min_date": date_str,
+                "max_date": date_str,
+            }
+
+        self._global_writers[key]["writer"].writerow(record)
+
+        dr = self._global_date_ranges[key]
+        if date_str < dr["min_date"]:
+            dr["min_date"] = date_str
+        if date_str > dr["max_date"]:
+            dr["max_date"] = date_str
+
+    def close_global_files(self) -> None:
+        """Close all open global CSV file handles"""
+        for info in self._global_writers.values():
+            f = info["file"]
+            if f and not f.closed:
+                f.close()
+
+    def get_global_file_info(self) -> Dict:
+        """Return file info for global datasets
+
+        Returns:
+            {(model, year): {"filepath": str, "min_date": datetime, "max_date": datetime}}
+        """
+        file_info = {}
+        for key, writer_info in self._global_writers.items():
+            dr = self._global_date_ranges[key]
+            file_info[key] = {
+                "filepath": writer_info["filepath"],
+                "min_date": parse_date(dr["min_date"]),
+                "max_date": parse_date(dr["max_date"]),
+            }
+        return file_info
 
     def generate_dataset(
         self, country_code: str, country_model_data: Dict
@@ -199,14 +181,17 @@ class Pipeline:
                 logger.warning(f"No records for {model} in {country_name}")
                 continue
 
-            # Update date range for this model's records
+            # Update date range
             for record in records:
-                date = record.get("DATES")
-                if date:
-                    if min_date is None or date < min_date:
-                        min_date = date
-                    if max_date is None or date > max_date:
-                        max_date = date
+                date_val = record.get("DATES")
+                if date_val:
+                    if not hasattr(date_val, "year"):
+                        date_val = parse_date(date_val)
+                    if date_val:
+                        if min_date is None or date_val < min_date:
+                            min_date = date_val
+                        if max_date is None or date_val > max_date:
+                            max_date = date_val
 
             resource_name = f"Real Time {model.capitalize()} Prices for {country_name}"
             resource_description = f"description_{model}"
