@@ -147,7 +147,7 @@ class Pipeline:
 
     def generate_dataset(
         self, country_code: str, country_model_data: Dict
-    ) -> Optional[Dataset]:
+    ) -> Optional[Tuple[Dataset, List[str]]]:
         country_name = Country.get_country_name_from_iso3(country_code)
         if not country_name:
             logger.warning(f"Unknown ISO3: {country_code}")
@@ -174,6 +174,7 @@ class Pipeline:
 
         min_date = None
         max_date = None
+        filepaths = []
 
         # Add a resource per model
         for model, records in country_model_data.items():
@@ -200,12 +201,14 @@ class Pipeline:
                 "description": self._configuration.get(resource_description, ""),
             }
 
+            filename = f"{slugify(resource_name)}.csv"
             dataset.generate_resource(
                 folder=self._tempdir,
-                filename=f"{slugify(resource_name)}.csv",
+                filename=filename,
                 rows=records,
                 resourcedata=resource_data,
             )
+            filepaths.append(os.path.join(self._tempdir, filename))
 
         # Set time period after collecting all dates
         if min_date is None or max_date is None:
@@ -214,7 +217,7 @@ class Pipeline:
 
         dataset.set_time_period(startdate=min_date, enddate=max_date)
 
-        return dataset
+        return dataset, filepaths
 
     def create_global_datasets(self, global_file_info: Dict) -> List[Dataset]:
         """Create global datasets from CSV files organized by model and year

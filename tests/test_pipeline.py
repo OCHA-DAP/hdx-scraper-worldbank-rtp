@@ -27,9 +27,10 @@ class TestPipeline:
                 pipeline = Pipeline(configuration, retriever, tempdir)
 
                 model_data = pipeline.fetch_country_data("AFG", models)
-                dataset = pipeline.generate_dataset("AFG", model_data)
+                result = pipeline.generate_dataset("AFG", model_data)
 
-                assert dataset is not None
+                assert result is not None
+                dataset, filepaths = result
 
                 dataset.update_from_yaml(
                     path=join(config_dir, "hdx_dataset_static.yaml")

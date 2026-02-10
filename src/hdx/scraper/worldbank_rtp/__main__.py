@@ -6,6 +6,7 @@ script then creates in HDX.
 """
 
 import logging
+import os
 from datetime import datetime
 from os.path import expanduser, join
 
@@ -91,8 +92,9 @@ def main(
                                 )
 
                         # Create country dataset
-                        dataset = pipeline.generate_dataset(country_code, model_data)
-                        if dataset:
+                        result = pipeline.generate_dataset(country_code, model_data)
+                        if result:
+                            dataset, filepaths = result
                             dataset.update_from_yaml(
                                 script_dir_plus_file(
                                     join("config", "hdx_dataset_static.yaml"),
@@ -106,6 +108,8 @@ def main(
                                 updated_by_script=_UPDATED_BY_SCRIPT,
                                 batch=info["batch"],
                             )
+                            for filepath in filepaths:
+                                os.remove(filepath)
                             countries_created += 1
                         else:
                             countries_failed += 1
