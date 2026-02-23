@@ -60,7 +60,7 @@ class TestPipeline:
                     "groups": [{"name": "afg"}],
                     "package_creator": "HDX Data Systems Team",
                     "private": False,
-                    "maintainer": "fdbb8e79-f020-4039-ab3a-9adb482273b8",
+                    "maintainer": "c112f456-9a0b-476a-917c-3c472b0b5e32",
                     "owner_org": "905a9a49-5325-4a31-a9d7-147a60a8387c",
                     "data_update_frequency": 14,
                     "subnational": "1",
