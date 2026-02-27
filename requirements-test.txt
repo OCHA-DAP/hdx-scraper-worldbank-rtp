@@ -15,7 +15,7 @@ attrs==25.4.0
     #   jsonlines
     #   jsonschema
     #   referencing
-certifi==2026.1.4
+certifi==2026.2.25
     # via
     #   -c requirements.txt
     #   requests
@@ -74,7 +74,7 @@ hdx-python-country==4.1.1
     #   -c requirements.txt
     #   hdx-scraper-worldbank-rtp (pyproject.toml)
     #   hdx-python-api
-hdx-python-utilities==4.0.7
+hdx-python-utilities==4.0.8
     # via
     #   -c requirements.txt
     #   hdx-scraper-worldbank-rtp (pyproject.toml)
@@ -89,7 +89,7 @@ idna==3.11
     #   -c requirements.txt
     #   email-validator
     #   requests
-ijson==3.4.0.post0
+ijson==3.5.0
     # via
     #   -c requirements.txt
     #   hdx-python-utilities
