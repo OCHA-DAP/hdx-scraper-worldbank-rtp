@@ -99,3 +99,28 @@ class TestPipeline:
                         "name": "Real Time Currency Prices for Afghanistan",
                     },
                 ]
+
+    def test_fetch_data_pagination_terminates_on_partial_page(
+        self, configuration, fixtures_dir, input_dir
+    ):
+        # Fixtures: MDG energy page 1 = 1000 records (found=1500), page 2 = 500 records.
+        # The loop must stop after page 2 because len(batch) < limit, even though
+        # offset (2000) is still less than found (1500 is wrong but irrelevant —
+        # the partial-page check fires first).
+        with temp_dir(
+            "TestWorldbank_rtpPagination",
+            delete_on_success=True,
+            delete_on_failure=False,
+        ) as tempdir:
+            with Download(user_agent="test") as downloader:
+                retriever = Retrieve(
+                    downloader=downloader,
+                    fallback_dir=tempdir,
+                    saved_dir=input_dir,
+                    temp_dir=tempdir,
+                    save=False,
+                    use_saved=True,
+                )
+                pipeline = Pipeline(configuration, retriever, tempdir)
+                records = list(pipeline.fetch_data("energy", iso3="MDG"))
+                assert len(records) == 1500

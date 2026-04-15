@@ -31,6 +31,10 @@ class Pipeline:
         self._global_writers: Dict[Tuple, dict] = {}
         self._global_date_ranges: Dict[Tuple, dict] = {}
 
+    # Safety cap: stop pagination if offset exceeds this value and log a warning
+    # Prevents runaway loops if the API never returns an empty or partial page
+    MAX_FETCH_OFFSET = 200_000
+
     def fetch_data(
         self,
         model: str,
@@ -42,14 +46,22 @@ class Pipeline:
         total = max_records
 
         while True:
+            if offset >= self.MAX_FETCH_OFFSET:
+                logger.warning(
+                    f"fetch_data reached safety cap of {self.MAX_FETCH_OFFSET} records "
+                    f"for model={model}, iso3={iso3}; stopping pagination"
+                )
+                break
+
             data_url = f"{self._configuration['base_url']}{self._configuration[model]}?limit={limit}&offset={offset}"
             if iso3:
                 data_url += f"&ISO3={iso3}"
 
             response = self._retriever.download_json(data_url)
 
+            # Use `found` (per-query count) when available; fall back to `total`
             if total is None:
-                total = response.get("total", 0)
+                total = response.get("found") or response.get("total", 0)
 
             batch = response.get("data", [])
             if not batch:
@@ -59,7 +71,13 @@ class Pipeline:
                 yield record
 
             offset += limit
-            if offset >= total:
+
+            # Primary termination: a page shorter than the limit means end of data
+            if len(batch) < limit:
+                break
+
+            # Secondary termination: offset has reached the reported record count
+            if total and offset >= total:
                 break
 
     def fetch_country_data(
