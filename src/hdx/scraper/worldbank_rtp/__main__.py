@@ -36,6 +36,7 @@ def main(
     use_saved: bool = False,
     max_countries: int | None = None,
     global_years: int | None = None,
+    countries: str | None = None,
 ) -> None:
     """Generate datasets and create them in HDX
 
@@ -69,6 +70,9 @@ def main(
             current_year = datetime.now().year
 
             country_codes = sorted(Country.countriesdata()["countries"].keys())
+            if countries:
+                filter_set = {c.strip().upper() for c in countries.split(",")}
+                country_codes = [c for c in country_codes if c in filter_set]
 
             countries_created = 0
             countries_failed = 0
@@ -76,20 +80,9 @@ def main(
             try:
                 for country_code in country_codes:
                     try:
-                        model_data = pipeline.fetch_country_data(country_code, models)
-
-                        if not any(model_data.values()):
-                            continue
-
-                        # Write to global CSVs
-                        for model, records in model_data.items():
-                            for record in records:
-                                pipeline.write_global_record(
-                                    model, record, current_year, global_years
-                                )
-
-                        # Create country dataset
-                        result = pipeline.generate_dataset(country_code, model_data)
+                        result = pipeline.process_country(
+                            country_code, models, current_year, global_years
+                        )
                         if result:
                             dataset, filepaths = result
                             dataset.update_from_yaml(

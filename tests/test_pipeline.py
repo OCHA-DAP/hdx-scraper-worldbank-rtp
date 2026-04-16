@@ -1,3 +1,4 @@
+from datetime import datetime
 from os.path import join
 
 from hdx.utilities.downloader import Download
@@ -26,8 +27,7 @@ class TestPipeline:
                 models = ["food", "energy", "currency"]
                 pipeline = Pipeline(configuration, retriever, tempdir)
 
-                model_data = pipeline.fetch_country_data("AFG", models)
-                result = pipeline.generate_dataset("AFG", model_data)
+                result = pipeline.process_country("AFG", models, datetime.now().year)
 
                 assert result is not None
                 dataset, filepaths = result
@@ -99,6 +99,14 @@ class TestPipeline:
                         "name": "Real Time Currency Prices for Afghanistan",
                     },
                 ]
+
+                for filename in [
+                    "real-time-energy-prices-for-afghanistan.csv",
+                    "real-time-currency-prices-for-afghanistan.csv",
+                ]:
+                    written = open(join(tempdir, filename)).read()
+                    expected = open(join(input_dir, filename)).read()
+                    assert written == expected, f"CSV mismatch: {filename}"
 
     def test_fetch_data_pagination_terminates_on_partial_page(
         self, configuration, fixtures_dir, input_dir
