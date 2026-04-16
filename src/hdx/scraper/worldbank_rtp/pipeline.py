@@ -38,12 +38,12 @@ class Pipeline:
     def fetch_data(
         self,
         model: str,
-        max_records: Optional[int] = None,
         iso3: Optional[str] = None,
-    ):
+    ) -> List:
         limit = 1000
         offset = 0
-        total = max_records
+        total = None
+        records = []
 
         while True:
             if offset >= self.MAX_FETCH_OFFSET:
@@ -67,9 +67,7 @@ class Pipeline:
             if not batch:
                 break
 
-            for record in batch:
-                yield record
-
+            records.extend(batch)
             offset += limit
 
             # Primary termination: a page shorter than the limit means end of data
@@ -80,22 +78,14 @@ class Pipeline:
             if total and offset >= total:
                 break
 
+        return records
+
     def fetch_country_data(
         self,
         country_code: str,
         models: List[str],
-        max_records: Optional[int] = None,
     ) -> Dict[str, List]:
-        """Fetch data by country
-
-        Returns:
-            {model: [records]}
-        """
-        model_data = {}
-        for model in models:
-            records = list(self.fetch_data(model, max_records, iso3=country_code))
-            model_data[model] = records
-        return model_data
+        return {model: self.fetch_data(model, iso3=country_code) for model in models}
 
     def write_global_record(
         self,

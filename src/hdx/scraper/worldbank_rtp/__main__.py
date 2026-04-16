@@ -35,7 +35,6 @@ def main(
     save: bool = False,
     use_saved: bool = False,
     max_countries: int | None = None,
-    max_records: int | None = None,
     global_years: int | None = None,
 ) -> None:
     """Generate datasets and create them in HDX
@@ -77,9 +76,7 @@ def main(
             try:
                 for country_code in country_codes:
                     try:
-                        model_data = pipeline.fetch_country_data(
-                            country_code, models, max_records
-                        )
+                        model_data = pipeline.fetch_country_data(country_code, models)
 
                         if not any(model_data.values()):
                             continue
@@ -134,20 +131,19 @@ def main(
 
                 for dataset in global_datasets:
                     try:
-                        if dataset:
-                            dataset.update_from_yaml(
-                                script_dir_plus_file(
-                                    join("config", "hdx_dataset_static.yaml"),
-                                    main,
-                                )
+                        dataset.update_from_yaml(
+                            script_dir_plus_file(
+                                join("config", "hdx_dataset_static.yaml"),
+                                main,
                             )
-                            dataset.create_in_hdx(
-                                remove_additional_resources=True,
-                                match_resource_order=False,
-                                updated_by_script=_UPDATED_BY_SCRIPT,
-                                batch=info["batch"],
-                            )
-                            global_created += 1
+                        )
+                        dataset.create_in_hdx(
+                            remove_additional_resources=True,
+                            match_resource_order=False,
+                            updated_by_script=_UPDATED_BY_SCRIPT,
+                            batch=info["batch"],
+                        )
+                        global_created += 1
                     except Exception as e:
                         logger.error(f"Failed to create global dataset: {e}")
                         global_failed += 1
@@ -157,7 +153,8 @@ def main(
                 global_failed += 1
 
             logger.info(
-                f"{countries_created} country, {global_created} global datasets"
+                f"{countries_created} country datasets created, {countries_failed} failed; "
+                f"{global_created} global datasets created, {global_failed} failed"
             )
 
 
